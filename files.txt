@@ -1,0 +1,2832 @@
+======================= schema.ts =======================
+import { pgTable, text, serial, integer, jsonb, timestamp, boolean, pgEnum } from "drizzle-orm/pg-core";
+import { createInsertSchema } from "drizzle-zod";
+import { z } from "zod";
+import { relations } from "drizzle-orm";
+
+// User roles enum
+export const userRoleEnum = pgEnum("user_role", ["user", "admin", "god_admin"]);
+
+// Enhanced User table for authentication
+export const users = pgTable("users", {
+  id: serial("id").primaryKey(),
+  username: text("username").notNull().unique(),
+  email: text("email").notNull().unique(),
+  password: text("password").notNull(),
+  fullName: text("full_name"),
+  role: userRoleEnum("role").default("user").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// API key status enum
+export const apiKeyStatusEnum = pgEnum("api_key_status", ["active", "inactive", "problem"]);
+
+// LLM type enum
+export const llmTypeEnum = pgEnum("llm_type", [
+  "claude_3_5_sonnet",
+  "gpt_4o",
+  "gpt_4o_mini",
+  "gpt_3_5_turbo",
+  "gpt_4_turbo",
+  "llama_3",
+  "llama_3_70b",
+  "llama_3_2_90b",
+  "llava_1_6",
+  "inflection_2_5",
+  "gemini_1_5_pro",
+  "ollama"
+]);
+
+// API keys table
+export const apiKeys = pgTable("api_keys", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  llmType: llmTypeEnum("llm_type").notNull(),
+  name: text("name").notNull(),
+  key: text("key").notNull(),
+  status: apiKeyStatusEnum("status").default("active").notNull(),
+  lastUsed: timestamp("last_used"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// Cloud storage providers enum
+export const cloudProviderEnum = pgEnum("cloud_provider", ["dropbox", "google_drive"]);
+
+// Cloud connections table
+export const cloudConnections = pgTable("cloud_connections", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  provider: cloudProviderEnum("provider").notNull(),
+  accessToken: text("access_token").notNull(),
+  refreshToken: text("refresh_token"),
+  expiresAt: timestamp("expires_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// Folders table for organizing files
+export const folders = pgTable("folders", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").references(() => users.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  path: text("path").notNull(),
+  parentId: integer("parent_id"),
+  description: text("description"),
+  color: text("color"),
+  icon: text("icon"),
+  isAutomated: boolean("is_automated").default(false),
+  autoRules: jsonb("auto_rules"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// File table for tracking files (enhanced with user relationship)
+export const files = pgTable("files", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").references(() => users.id, { onDelete: "set null" }),
+  folderId: integer("folder_id").references(() => folders.id, { onDelete: "set null" }),
+  originalName: text("original_name").notNull(),
+  newName: text("new_name").notNull(),
+  size: integer("size").notNull(),
+  type: text("type").notNull(),
+  path: text("path").notNull(),
+  cloudProvider: cloudProviderEnum("cloud_provider"),
+  cloudFileId: text("cloud_file_id"),
+  metadata: jsonb("metadata"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// Preset table for saving custom presets (enhanced with user relationship)
+export const presets = pgTable("presets", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").references(() => users.id, { onDelete: "set null" }),
+  name: text("name").notNull(),
+  pattern: text("pattern").notNull(),
+  isCustom: boolean("is_custom").notNull().default(false),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// File history table for tracking rename operations
+export const fileHistory = pgTable("file_history", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  originalName: text("original_name").notNull(),
+  newName: text("new_name").notNull(),
+  fileType: text("file_type").notNull(),
+  fileSize: integer("file_size").notNull(),
+  renamePattern: text("rename_pattern"),
+  usedAI: boolean("used_ai").default(false),
+  aiModel: text("ai_model"),
+  details: jsonb("details"),
+  renamedAt: timestamp("renamed_at").defaultNow().notNull(),
+});
+
+// AI feature status enum
+export const aiFeatureStatusEnum = pgEnum("ai_feature_status", ["active", "inactive", "problem"]);
+
+// Agent status enum
+export const agentStatusEnum = pgEnum("agent_status", ["idle", "running", "completed", "failed"]);
+
+// Agent types enum
+export const agentTypeEnum = pgEnum("agent_type", [
+  "file_organizer", 
+  "content_analyzer", 
+  "batch_processor", 
+  "file_sync",
+  "intelligent_categorization",
+  "performance_optimization",
+  "file_annotation",
+  "file_preview",
+  "custom"
+]);
+
+// AI Agents table
+export const agents = pgTable("agents", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  type: agentTypeEnum("type").notNull(),
+  description: text("description").notNull(),
+  status: agentStatusEnum("status").default("idle").notNull(),
+  config: jsonb("config"),
+  lastRun: timestamp("last_run"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// AI features table
+export const aiFeatures = pgTable("ai_features", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  featureId: text("feature_id").notNull(),
+  name: text("name").notNull(),
+  description: text("description").notNull(),
+  status: aiFeatureStatusEnum("status").default("inactive").notNull(),
+  requiredLlmType: text("required_llm_type"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// Document segment type enum
+export const documentSegmentTypeEnum = pgEnum("document_segment_type", [
+  "pdf_management",
+  "finance",
+  "document_management",
+  "collaboration_workflow",
+  "legal",
+  "search_retrieval",
+  "custom"
+]);
+
+// Document segment templates
+export const documentSegmentTemplates = pgTable("document_segment_templates", {
+  id: serial("id").primaryKey(),
+  segmentType: documentSegmentTypeEnum("segment_type").notNull(),
+  name: text("name").notNull(),
+  description: text("description").notNull(),
+  features: jsonb("features").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// Renaming conversations for document segments
+export const renamingConversations = pgTable("renaming_conversations", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  segmentTemplateId: integer("segment_template_id").references(() => documentSegmentTemplates.id),
+  title: text("title").notNull(),
+  conversation: jsonb("conversation").notNull(),
+  context: jsonb("context"),
+  examples: jsonb("examples"),
+  isPublic: boolean("is_public").default(false).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// Define relations
+export const usersRelations = relations(users, ({ many }) => ({
+  apiKeys: many(apiKeys),
+  cloudConnections: many(cloudConnections),
+  folders: many(folders),
+  files: many(files),
+  presets: many(presets),
+  fileHistory: many(fileHistory),
+  aiFeatures: many(aiFeatures),
+  agents: many(agents),
+  renamingConversations: many(renamingConversations),
+}));
+
+export const agentsRelations = relations(agents, ({ one }) => ({
+  user: one(users, {
+    fields: [agents.userId],
+    references: [users.id],
+  }),
+}));
+
+export const apiKeysRelations = relations(apiKeys, ({ one }) => ({
+  user: one(users, {
+    fields: [apiKeys.userId],
+    references: [users.id],
+  }),
+}));
+
+export const cloudConnectionsRelations = relations(cloudConnections, ({ one }) => ({
+  user: one(users, {
+    fields: [cloudConnections.userId],
+    references: [users.id],
+  }),
+}));
+
+export const foldersRelations = relations(folders, ({ one, many }) => ({
+  user: one(users, {
+    fields: [folders.userId],
+    references: [users.id],
+  }),
+  parent: one(folders, {
+    fields: [folders.parentId],
+    references: [folders.id],
+  }),
+  files: many(files),
+}));
+
+export const filesRelations = relations(files, ({ one }) => ({
+  user: one(users, {
+    fields: [files.userId],
+    references: [users.id],
+  }),
+  folder: one(folders, {
+    fields: [files.folderId],
+    references: [folders.id],
+  }),
+}));
+
+export const presetsRelations = relations(presets, ({ one }) => ({
+  user: one(users, {
+    fields: [presets.userId],
+    references: [users.id],
+  }),
+}));
+
+export const fileHistoryRelations = relations(fileHistory, ({ one }) => ({
+  user: one(users, {
+    fields: [fileHistory.userId],
+    references: [users.id],
+  }),
+}));
+
+export const aiFeaturesRelations = relations(aiFeatures, ({ one }) => ({
+  user: one(users, {
+    fields: [aiFeatures.userId],
+    references: [users.id],
+  }),
+}));
+
+export const documentSegmentTemplatesRelations = relations(documentSegmentTemplates, ({ many }) => ({
+  renamingConversations: many(renamingConversations),
+}));
+
+export const renamingConversationsRelations = relations(renamingConversations, ({ one }) => ({
+  user: one(users, {
+    fields: [renamingConversations.userId],
+    references: [users.id],
+  }),
+  segmentTemplate: one(documentSegmentTemplates, {
+    fields: [renamingConversations.segmentTemplateId],
+    references: [documentSegmentTemplates.id],
+  }),
+}));
+
+// Insert schemas
+export const insertUserSchema = createInsertSchema(users).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertApiKeySchema = createInsertSchema(apiKeys).omit({
+  id: true,
+  status: true,
+  lastUsed: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertCloudConnectionSchema = createInsertSchema(cloudConnections).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertFolderSchema = createInsertSchema(folders).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertFileSchema = createInsertSchema(files).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertPresetSchema = createInsertSchema(presets).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertFileHistorySchema = createInsertSchema(fileHistory).omit({
+  id: true,
+  renamedAt: true,
+});
+
+export const insertAIFeatureSchema = createInsertSchema(aiFeatures).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertAgentSchema = createInsertSchema(agents).omit({
+  id: true,
+  lastRun: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertDocumentSegmentTemplateSchema = createInsertSchema(documentSegmentTemplates).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertRenamingConversationSchema = createInsertSchema(renamingConversations).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+// Types
+export type InsertUser = z.infer<typeof insertUserSchema>;
+export type User = typeof users.$inferSelect;
+
+export type InsertApiKey = z.infer<typeof insertApiKeySchema>;
+export type ApiKey = typeof apiKeys.$inferSelect;
+
+export type InsertCloudConnection = z.infer<typeof insertCloudConnectionSchema>;
+export type CloudConnection = typeof cloudConnections.$inferSelect;
+
+export type InsertFolder = z.infer<typeof insertFolderSchema>;
+export type Folder = typeof folders.$inferSelect;
+
+export type InsertFile = z.infer<typeof insertFileSchema>;
+export type File = typeof files.$inferSelect;
+
+export type InsertPreset = z.infer<typeof insertPresetSchema>;
+export type Preset = typeof presets.$inferSelect;
+
+export type InsertFileHistory = z.infer<typeof insertFileHistorySchema>;
+export type FileHistory = typeof fileHistory.$inferSelect;
+
+export type InsertAIFeature = z.infer<typeof insertAIFeatureSchema>;
+export type AIFeature = typeof aiFeatures.$inferSelect;
+
+export type InsertAgent = z.infer<typeof insertAgentSchema>;
+export type Agent = typeof agents.$inferSelect;
+
+export type InsertDocumentSegmentTemplate = z.infer<typeof insertDocumentSegmentTemplateSchema>;
+export type DocumentSegmentTemplate = typeof documentSegmentTemplates.$inferSelect;
+
+export type InsertRenamingConversation = z.infer<typeof insertRenamingConversationSchema>;
+export type RenamingConversation = typeof renamingConversations.$inferSelect;
+
+======================= auth.ts =======================
+import passport from "passport";
+import { Strategy as LocalStrategy } from "passport-local";
+import { Express, Request, Response, NextFunction } from "express";
+import session from "express-session";
+import { scrypt, randomBytes, timingSafeEqual } from "crypto";
+import { promisify } from "util";
+import { storage } from "./storage";
+import { User } from "@shared/schema";
+import connectPg from "connect-pg-simple";
+import { pool } from "./db";
+import bcrypt from "bcryptjs";
+
+// Adding User type to Express namespace
+declare global {
+  namespace Express {
+    // Extend the User interface with our User type
+    interface User {
+      id: number;
+      username: string;
+      email: string;
+      password: string;
+      fullName?: string | null;
+      role: string;
+      createdAt: Date;
+      updatedAt: Date;
+    }
+  }
+}
+
+const scryptAsync = promisify(scrypt);
+
+async function hashPassword(password: string) {
+  const salt = randomBytes(16).toString("hex");
+  const buf = (await scryptAsync(password, salt, 64)) as Buffer;
+  return `${buf.toString("hex")}.${salt}`;
+}
+
+async function comparePasswords(supplied: string, stored: string) {
+  const [hashed, salt] = stored.split(".");
+  const hashedBuf = Buffer.from(hashed, "hex");
+  const suppliedBuf = (await scryptAsync(supplied, salt, 64)) as Buffer;
+  return timingSafeEqual(hashedBuf, suppliedBuf);
+}
+
+export function setupAuth(app: Express) {
+  // Initialize PostgreSQL session store
+  const PostgresStore = connectPg(session);
+  
+  const sessionSettings: session.SessionOptions = {
+    secret: process.env.SESSION_SECRET || 'namewizard-dev-secret',
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+      secure: process.env.NODE_ENV === 'production',
+      maxAge: 1000 * 60 * 60 * 24 * 7, // 1 week
+    },
+    store: new PostgresStore({
+      pool,
+      tableName: 'session',
+      createTableIfMissing: false // Don't create table as it already exists
+    })
+  };
+
+  // Set trust proxy when in production
+  if (process.env.NODE_ENV === 'production') {
+    app.set("trust proxy", 1);
+  }
+  
+  // Set up session middleware
+  app.use(session(sessionSettings));
+  
+  // Initialize passport
+  app.use(passport.initialize());
+  app.use(passport.session());
+
+  // Configure local strategy for username/password login
+  passport.use(
+    new LocalStrategy(async (username, password, done) => {
+      try {
+        // Try to find user by username
+        let user = await storage.getUserByUsername(username);
+        
+        // If not found by username, try by email
+        if (!user && username.includes('@')) {
+          user = await storage.getUserByEmail(username);
+        }
+        
+        if (!user) {
+          return done(null, false, { message: "Invalid username or password" });
+        }
+        
+        // Verify password
+        const isPasswordValid = await bcrypt.compare(password, user.password);
+        if (!isPasswordValid) {
+          return done(null, false, { message: "Invalid username or password" });
+        }
+        
+        return done(null, user);
+      } catch (error) {
+        return done(error);
+      }
+    })
+  );
+
+  // Serialize user into the session
+  passport.serializeUser((user, done) => {
+    done(null, user.id);
+  });
+
+  // Deserialize user from the session
+  passport.deserializeUser(async (id: number, done) => {
+    try {
+      const user = await storage.getUser(id);
+      done(null, user);
+    } catch (error) {
+      done(error);
+    }
+  });
+
+  // Authentication middleware
+  const authenticateUser = (req: Request, res: Response, next: NextFunction) => {
+    if (req.isAuthenticated()) {
+      return next();
+    }
+    res.status(401).json({ message: "Unauthorized" });
+  };
+
+  // Authentication routes
+  
+  // Register route
+  app.post("/api/register", async (req, res, next) => {
+    try {
+      const { username, email, password, fullName } = req.body;
+      
+      // Check if username already exists
+      const existingUsername = await storage.getUserByUsername(username);
+      if (existingUsername) {
+        return res.status(400).json({ message: "Username already exists" });
+      }
+      
+      // Check if email already exists
+      const existingEmail = await storage.getUserByEmail(email);
+      if (existingEmail) {
+        return res.status(400).json({ message: "Email already exists" });
+      }
+      
+      // Hash password
+      const hashedPassword = await bcrypt.hash(password, 10);
+      
+      // Create user
+      const user = await storage.createUser({
+        username,
+        email,
+        password: hashedPassword,
+        fullName,
+        role: "user"
+      });
+      
+      // Login the user
+      req.login(user, (err) => {
+        if (err) return next(err);
+        
+        // Remove password from response
+        const { password, ...userWithoutPassword } = user;
+        res.status(201).json(userWithoutPassword);
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // Login route
+  app.post("/api/login", (req, res, next) => {
+    passport.authenticate("local", (err: Error | null, user: User | false, info: { message: string } | undefined) => {
+      if (err) return next(err);
+      if (!user) return res.status(401).json({ message: info?.message || "Invalid credentials" });
+      
+      req.login(user, (err: Error | null) => {
+        if (err) return next(err);
+        
+        // Remove password from response
+        const { password, ...userWithoutPassword } = user;
+        res.json(userWithoutPassword);
+      });
+    })(req, res, next);
+  });
+
+  // Logout route
+  app.post("/api/logout", (req, res, next) => {
+    req.logout((err: Error | null) => {
+      if (err) return next(err);
+      res.json({ message: "Logged out successfully" });
+    });
+  });
+
+  // Get current user route
+  app.get("/api/user", authenticateUser, (req, res) => {
+    // Remove password from response
+    const { password, ...userWithoutPassword } = req.user as User;
+    res.json(userWithoutPassword);
+  });
+
+  return { authenticateUser };
+}
+
+======================= FileDragDropZone.tsx =======================
+import React, { useState, useEffect, useCallback } from 'react';
+import { useDropzone, Accept, FileRejection, FileError } from 'react-dropzone';
+import { Card } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Upload, X, File as FileIcon, Image as ImageIcon, FileText, FilePlus, AlertCircle } from 'lucide-react';
+import { formatBytes } from '@/lib/utils';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+
+export interface FileDragDropZoneProps {
+  // Basic props
+  onFilesSelected: (files: File[]) => void;
+  accept?: Accept;
+  maxFiles?: number;
+  maxSize?: number;
+  disabled?: boolean;
+  multiple?: boolean;
+  
+  // Customization props
+  title?: string;
+  description?: string;
+  dropzoneText?: string;
+  
+  // Optional callbacks
+  onError?: (message: string) => void;
+  onClear?: () => void;
+  
+  // File validation
+  fileValidator?: (file: File) => { valid: boolean; message?: string } | undefined;
+}
+
+export function FileDragDropZone({
+  onFilesSelected,
+  accept = {
+    'image/*': ['.png', '.jpg', '.jpeg', '.gif', '.webp'],
+    'application/pdf': ['.pdf'],
+    'text/plain': ['.txt'],
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx'],
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'],
+    'application/vnd.openxmlformats-officedocument.presentationml.presentation': ['.pptx'],
+  },
+  maxFiles = 50,
+  maxSize = 50 * 1024 * 1024, // 50 MB default
+  disabled = false,
+  multiple = true,
+  title = 'Upload Files',
+  description = 'Drag and drop files here or click to browse',
+  dropzoneText = 'Drop files here',
+  onError,
+  onClear,
+  fileValidator,
+}: FileDragDropZoneProps) {
+  const [files, setFiles] = useState<File[]>([]);
+  const [rejectedFiles, setRejectedFiles] = useState<{ file: File; errors: any[] }[]>([]);
+  const [isDraggingOver, setIsDraggingOver] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const handleDrop = useCallback(
+    (acceptedFiles: File[], fileRejections: FileRejection[]) => {
+      // Check if adding these files would exceed maxFiles
+      if (files.length + acceptedFiles.length > maxFiles) {
+        const message = `Cannot add more than ${maxFiles} files`;
+        setErrorMessage(message);
+        onError?.(message);
+        return;
+      }
+
+      // Perform custom validation if provided
+      const invalidFiles: { file: File; errors: any[] }[] = [];
+      if (fileValidator) {
+        acceptedFiles.forEach(file => {
+          const result = fileValidator(file);
+          if (result && !result.valid) {
+            invalidFiles.push({
+              file,
+              errors: [{ code: 'custom-validation', message: result.message || 'Invalid file' }]
+            });
+          }
+        });
+      }
+
+      const validFiles = fileValidator
+        ? acceptedFiles.filter(file => !invalidFiles.some(invalid => invalid.file === file))
+        : acceptedFiles;
+
+      // Update files state
+      setFiles(prevFiles => [...prevFiles, ...validFiles]);
+      
+      // Update rejected files
+      setRejectedFiles(prevRejected => [
+        ...prevRejected,
+        ...fileRejections.map(rejection => ({
+          file: rejection.file,
+          errors: rejection.errors
+        })),
+        ...invalidFiles
+      ]);
+
+      // Clear error after 3 seconds
+      if (errorMessage) {
+        setTimeout(() => setErrorMessage(null), 3000);
+      }
+    },
+    [files.length, maxFiles, fileValidator, errorMessage, onError]
+  );
+
+  // Notify parent component when files change
+  useEffect(() => {
+    if (files.length > 0) {
+      onFilesSelected(files);
+    }
+  }, [files, onFilesSelected]);
+
+  const { getRootProps, getInputProps, isDragActive, open } = useDropzone({
+    onDrop: handleDrop,
+    accept,
+    maxFiles,
+    maxSize,
+    disabled,
+    multiple,
+    noClick: true,
+    onDragEnter: () => setIsDraggingOver(true),
+    onDragLeave: () => setIsDraggingOver(false),
+  });
+
+  const clearFiles = useCallback(() => {
+    setFiles([]);
+    setRejectedFiles([]);
+    onClear?.();
+  }, [onClear]);
+
+  // Get a unique list of file types for display
+  const uniqueFileTypes = new Set(files.map(file => file.type.split('/')[0]));
+
+  // Helper function to get file icon based on MIME type
+  const getFileIcon = (file: File) => {
+    const type = file.type.split('/')[0];
+    
+    switch (type) {
+      case 'image':
+        return <ImageIcon className="h-4 w-4" />;
+      case 'application':
+        return <FileText className="h-4 w-4" />;
+      case 'text':
+        return <FileText className="h-4 w-4" />;
+      default:
+        return <FileIcon className="h-4 w-4" />;
+    }
+  };
+
+  return (
+    <div className="w-full space-y-4">
+      <Card
+        {...getRootProps()}
+        className={`p-4 border-dashed relative overflow-hidden ${
+          isDraggingOver || isDragActive
+            ? 'border-primary bg-primary/5'
+            : 'border-border'
+        } ${disabled ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer hover:border-primary/50'}`}
+      >
+        <input {...getInputProps()} />
+        
+        <div 
+          className={`absolute inset-0 bg-primary/10 flex items-center justify-center font-medium transition-opacity ${
+            isDraggingOver ? 'opacity-100 z-10' : 'opacity-0 -z-10'
+          }`}
+        >
+          {dropzoneText}
+        </div>
+        
+        <div className="flex flex-col items-center justify-center py-6 text-center">
+          <Upload className="h-10 w-10 text-muted-foreground mb-2" />
+          <h3 className="text-lg font-medium">{title}</h3>
+          <p className="text-sm text-muted-foreground mt-1 mb-3">{description}</p>
+          
+          {files.length > 0 && (
+            <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+              <span>{files.length} file{files.length !== 1 ? 's' : ''} selected</span>
+              {uniqueFileTypes.size > 0 && (
+                <span className="flex items-center gap-1">
+                  (
+                  {Array.from(uniqueFileTypes).map((type, index, arr) => (
+                    <React.Fragment key={type}>
+                      {type}
+                      {index < arr.length - 1 ? ', ' : ''}
+                    </React.Fragment>
+                  ))}
+                  )
+                </span>
+              )}
+            </div>
+          )}
+          
+          <div className="flex gap-3 mt-4">
+            <Button 
+              type="button" 
+              onClick={open} 
+              disabled={disabled || files.length >= maxFiles}
+              variant="secondary"
+              size="sm"
+            >
+              <FilePlus className="h-4 w-4 mr-1.5" />
+              Browse Files
+            </Button>
+            
+            {files.length > 0 && (
+              <Button 
+                type="button" 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  clearFiles();
+                }} 
+                variant="outline"
+                size="sm"
+              >
+                <X className="h-4 w-4 mr-1.5" />
+                Clear All
+              </Button>
+            )}
+          </div>
+        </div>
+      </Card>
+      
+      {errorMessage && (
+        <Alert variant="destructive" className="mb-3">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>{errorMessage}</AlertDescription>
+        </Alert>
+      )}
+
+      {/* File list */}
+      {files.length > 0 && (
+        <Card className="overflow-hidden">
+          <ScrollArea className="max-h-[240px]">
+            <div className="p-1">
+              {files.map((file, index) => (
+                <div
+                  key={`${file.name}-${index}`}
+                  className="flex items-center justify-between p-2 hover:bg-muted/50 rounded-md"
+                >
+                  <div className="flex items-center gap-2 overflow-hidden">
+                    {getFileIcon(file)}
+                    <div className="overflow-hidden">
+                      <p className="text-sm font-medium truncate">{file.name}</p>
+                      <p className="text-xs text-muted-foreground">{formatBytes(file.size)}</p>
+                    </div>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setFiles(files.filter((_, i) => i !== index));
+                    }}
+                  >
+                    <X className="h-4 w-4" />
+                    <span className="sr-only">Remove</span>
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </ScrollArea>
+        </Card>
+      )}
+
+      {/* Rejected files */}
+      {rejectedFiles.length > 0 && (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>
+            <p className="font-medium mb-1">The following files couldn't be added:</p>
+            <ul className="text-sm list-disc list-inside">
+              {rejectedFiles.map((rejected, index) => (
+                <li key={index} className="ml-2">
+                  <span className="font-medium">{rejected.file.name}</span>
+                  <span className="text-xs block ml-5">
+                    {rejected.errors.map((error: any) => error.message).join(', ')}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </AlertDescription>
+        </Alert>
+      )}
+    </div>
+  );
+}
+
+======================= ModelSelectionDropdown.tsx =======================
+import React, { useMemo } from 'react';
+import { Check, ChevronDown, Info, AlertCircle, Star } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuPortal,
+  DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { cn } from '@/lib/utils';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
+import { Badge } from '@/components/ui/badge';
+
+export type AIModel = {
+  id: string;
+  name: string;
+  provider: 'openai' | 'anthropic' | 'google' | 'meta' | 'mistral' | 'local' | 'perplexity' | 'other';
+  isAvailable: boolean;
+  description?: string;
+  capabilities?: string[];
+  tier?: 'free' | 'basic' | 'premium' | 'enterprise';
+  contextWindow?: number;
+  isMultimodal?: boolean;
+};
+
+export type AIProvider = {
+  id: string;
+  name: string;
+  models: AIModel[];
+  isAvailable: boolean;
+  priority: number;
+};
+
+type ModelSelectionDropdownProps = {
+  selectedModel: AIModel | null;
+  providers: AIProvider[];
+  onModelSelect: (model: AIModel) => void;
+  label?: string;
+  disabled?: boolean;
+  showProviderGroups?: boolean;
+};
+
+// Helper to get the provider icon
+function getProviderIcon(provider: string) {
+  switch (provider) {
+    case 'openai':
+      return '🟢';
+    case 'anthropic':
+      return '🟣';
+    case 'google':
+      return '🔵';
+    case 'meta':
+      return '🟡';
+    case 'mistral':
+      return '🔴';
+    case 'perplexity':
+      return '🟠';
+    case 'local':
+      return '🏠';
+    default:
+      return '🤖';
+  }
+}
+
+// Helper to get available badge based on tier
+function getTierBadge(tier?: string) {
+  if (!tier) return null;
+  
+  switch (tier) {
+    case 'free':
+      return <Badge variant="outline" className="ml-2 bg-green-50 text-green-700 border-green-200">Free</Badge>;
+    case 'basic':
+      return <Badge variant="outline" className="ml-2 bg-blue-50 text-blue-700 border-blue-200">Basic</Badge>;
+    case 'premium':
+      return <Badge variant="outline" className="ml-2 bg-purple-50 text-purple-700 border-purple-200">Premium</Badge>;
+    case 'enterprise':
+      return <Badge variant="outline" className="ml-2 bg-amber-50 text-amber-700 border-amber-200">Enterprise</Badge>;
+    default:
+      return null;
+  }
+}
+
+function ModelMenuItem({ model, isSelected, onSelect }: { model: AIModel; isSelected: boolean; onSelect: () => void }) {
+  return (
+    <DropdownMenuItem
+      className={cn(
+        "flex justify-between items-center py-2 px-2",
+        !model.isAvailable && "opacity-50 cursor-not-allowed"
+      )}
+      disabled={!model.isAvailable}
+      onSelect={() => model.isAvailable && onSelect()}
+    >
+      <div className="flex items-center gap-2">
+        <span className="mr-1">{getProviderIcon(model.provider)}</span>
+        <span>{model.name}</span>
+        {model.isMultimodal && (
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="cursor-help">
+                  <Badge variant="outline" className="text-xs px-1 py-0 h-5 bg-teal-50 text-teal-700 border-teal-200">
+                    Vision
+                  </Badge>
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p className="text-xs">Supports image analysis</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        )}
+        {getTierBadge(model.tier)}
+      </div>
+      <div className="flex items-center">
+        {!model.isAvailable ? (
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <AlertCircle className="h-4 w-4 text-muted-foreground" />
+              </TooltipTrigger>
+              <TooltipContent>
+                <p className="text-xs">API key not configured</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        ) : isSelected ? (
+          <Check className="h-4 w-4" />
+        ) : null}
+      </div>
+    </DropdownMenuItem>
+  );
+}
+
+export function ModelSelectionDropdown({
+  selectedModel,
+  providers,
+  onModelSelect,
+  label = 'Select Model',
+  disabled = false,
+  showProviderGroups = true,
+}: ModelSelectionDropdownProps) {
+  // Sort providers by priority (highest first) and then filter out providers with no models
+  const sortedProviders = useMemo(() => {
+    return providers ? [...providers]
+      .sort((a, b) => b.priority - a.priority)
+      .filter(provider => provider.models.length > 0) 
+      : [];
+  }, [providers]);
+
+  // Get flat list of all models
+  const allModels = useMemo(() => {
+    return providers ? providers.flatMap(provider => provider.models) : [];
+  }, [providers]);
+
+  // Filter to only available models
+  const availableModels = useMemo(() => {
+    return allModels.filter(model => model.isAvailable);
+  }, [allModels]);
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild disabled={disabled}>
+        <Button variant="outline" className="w-full justify-between">
+          <div className="flex items-center truncate">
+            {selectedModel ? (
+              <>
+                <span className="mr-2">{getProviderIcon(selectedModel.provider)}</span>
+                <span className="truncate">{selectedModel.name}</span>
+              </>
+            ) : (
+              <span>{label}</span>
+            )}
+          </div>
+          <ChevronDown className="h-4 w-4 opacity-50" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent className="w-56" align="start">
+        <DropdownMenuLabel>
+          Select AI Model
+          {selectedModel?.description && (
+            <p className="text-xs font-normal text-muted-foreground mt-1">
+              {selectedModel.description}
+            </p>
+          )}
+        </DropdownMenuLabel>
+        
+        <DropdownMenuSeparator />
+        
+        {/* Show Provider Groups */}
+        {showProviderGroups ? (
+          sortedProviders.map((provider) => {
+            // Skip providers with no available models
+            if (!provider.isAvailable || provider.models.length === 0) return null;
+            
+            return (
+              <DropdownMenuGroup key={provider.id}>
+                <DropdownMenuLabel className="text-xs py-1.5">
+                  {provider.name}
+                </DropdownMenuLabel>
+                {provider.models.map((model) => (
+                  <ModelMenuItem
+                    key={model.id}
+                    model={model}
+                    isSelected={selectedModel?.id === model.id}
+                    onSelect={() => onModelSelect(model)}
+                  />
+                ))}
+              </DropdownMenuGroup>
+            );
+          })
+        ) : (
+          // Show flat list
+          allModels.map((model) => (
+            <ModelMenuItem
+              key={model.id}
+              model={model}
+              isSelected={selectedModel?.id === model.id}
+              onSelect={() => onModelSelect(model)}
+            />
+          ))
+        )}
+        
+        {availableModels.length === 0 && (
+          <div className="px-2 py-4 text-center">
+            <AlertCircle className="h-5 w-5 text-muted-foreground mx-auto mb-2" />
+            <p className="text-sm text-muted-foreground">No AI models available</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Please configure API keys in settings
+            </p>
+          </div>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+======================= ThemeContext.tsx =======================
+import { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import { themeOptions } from "@/components/theme/ThemeChanger";
+
+type ThemeContextType = {
+  currentTheme: string;
+  changeTheme: (theme: string) => void;
+};
+
+const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
+
+export const ThemeProvider = ({ children }: { children: ReactNode }) => {
+  const [currentTheme, setCurrentTheme] = useState("black-orange");
+
+  // Initialize theme from localStorage when component mounts
+  useEffect(() => {
+    const storedTheme = localStorage.getItem("theme-preference") || "black-orange";
+    setCurrentTheme(storedTheme);
+    applyTheme(storedTheme);
+  }, []);
+
+  // Apply theme to document
+  const applyTheme = (theme: string) => {
+    // Remove all theme classes from HTML element
+    document.documentElement.classList.remove(
+      "theme-black-orange",
+      "theme-dark",
+      "theme-light",
+      "theme-black-blue",
+      "theme-black-red",
+      "theme-blue-black",
+      "theme-white-darkblue"
+    );
+
+    // Add the selected theme class
+    document.documentElement.classList.add(`theme-${theme}`);
+
+    // Store preference
+    localStorage.setItem("theme-preference", theme);
+
+    // Get the selected theme object from theme options
+    const selectedTheme = themeOptions.find((t) => t.value === theme);
+    
+    if (selectedTheme) {
+      // Apply CSS variables directly based on theme selection
+      document.documentElement.style.setProperty("--primary", selectedTheme.primary);
+      
+      // Set additional theme colors based on selection
+      if (theme === "black-orange") {
+        document.documentElement.style.setProperty("--background", "0 0% 0%");
+        document.documentElement.style.setProperty("--foreground", "0 0% 100%");
+        document.documentElement.style.setProperty("--primary", "24.6 100% 60%");
+        document.documentElement.style.setProperty("--primary-foreground", "0 0% 0%");
+        document.documentElement.style.setProperty("--card", "0 0% 6%");
+        document.documentElement.style.setProperty("--card-foreground", "0 0% 100%");
+        document.documentElement.style.setProperty("--popover", "0 0% 6%");
+        document.documentElement.style.setProperty("--popover-foreground", "0 0% 100%");
+        document.documentElement.style.setProperty("--secondary", "0 0% 10%");
+        document.documentElement.style.setProperty("--secondary-foreground", "0 0% 100%");
+        document.documentElement.style.setProperty("--muted", "0 0% 15%");
+        document.documentElement.style.setProperty("--muted-foreground", "0 0% 65%");
+        document.documentElement.style.setProperty("--accent", "24.6 100% 60%");
+        document.documentElement.style.setProperty("--accent-foreground", "0 0% 0%");
+        document.documentElement.style.setProperty("--border", "0 0% 15%");
+        document.documentElement.style.setProperty("--input", "0 0% 15%");
+        document.documentElement.style.setProperty("--ring", "24.6 100% 60%");
+      } else if (theme === "dark") {
+        document.documentElement.style.setProperty("--background", "240 10% 3.9%");
+        document.documentElement.style.setProperty("--foreground", "0 0% 98%");
+        document.documentElement.style.setProperty("--card", "240 10% 6%");
+        document.documentElement.style.setProperty("--card-foreground", "0 0% 98%");
+        document.documentElement.style.setProperty("--popover", "240 10% 3.9%");
+        document.documentElement.style.setProperty("--popover-foreground", "0 0% 98%");
+        document.documentElement.style.setProperty("--primary", "250 95% 65%");
+        document.documentElement.style.setProperty("--primary-foreground", "0 0% 98%");
+        document.documentElement.style.setProperty("--secondary", "240 3.7% 15.9%");
+        document.documentElement.style.setProperty("--secondary-foreground", "0 0% 98%");
+        document.documentElement.style.setProperty("--muted", "240 3.7% 15.9%");
+        document.documentElement.style.setProperty("--muted-foreground", "240 5% 64.9%");
+        document.documentElement.style.setProperty("--accent", "240 3.7% 15.9%");
+        document.documentElement.style.setProperty("--accent-foreground", "0 0% 98%");
+        document.documentElement.style.setProperty("--border", "240 3.7% 15.9%");
+        document.documentElement.style.setProperty("--input", "240 3.7% 15.9%");
+        document.documentElement.style.setProperty("--ring", "250 95% 65%");
+      } else if (theme === "light") {
+        document.documentElement.style.setProperty("--background", "0 0% 100%");
+        document.documentElement.style.setProperty("--foreground", "240 10% 3.9%");
+        document.documentElement.style.setProperty("--card", "0 0% 98%");
+        document.documentElement.style.setProperty("--card-foreground", "240 10% 3.9%");
+        document.documentElement.style.setProperty("--popover", "0 0% 100%");
+        document.documentElement.style.setProperty("--popover-foreground", "240 10% 3.9%");
+        document.documentElement.style.setProperty("--primary", "217 91% 60%");
+        document.documentElement.style.setProperty("--primary-foreground", "0 0% 98%");
+        document.documentElement.style.setProperty("--secondary", "240 4.8% 95.9%");
+        document.documentElement.style.setProperty("--secondary-foreground", "240 5.9% 10%");
+        document.documentElement.style.setProperty("--muted", "240 4.8% 95.9%");
+        document.documentElement.style.setProperty("--muted-foreground", "240 3.8% 46.1%");
+        document.documentElement.style.setProperty("--accent", "240 4.8% 95.9%");
+        document.documentElement.style.setProperty("--accent-foreground", "240 5.9% 10%");
+        document.documentElement.style.setProperty("--border", "240 5.9% 90%");
+        document.documentElement.style.setProperty("--input", "240 5.9% 90%");
+        document.documentElement.style.setProperty("--ring", "217 91% 60%");
+      } else if (theme === "black-blue") {
+        document.documentElement.style.setProperty("--background", "0 0% 0%");
+        document.documentElement.style.setProperty("--foreground", "0 0% 100%");
+        document.documentElement.style.setProperty("--card", "0 0% 6%");
+        document.documentElement.style.setProperty("--card-foreground", "0 0% 100%");
+        document.documentElement.style.setProperty("--popover", "0 0% 6%");
+        document.documentElement.style.setProperty("--popover-foreground", "0 0% 100%");
+        document.documentElement.style.setProperty("--primary", "217 91% 60%");
+        document.documentElement.style.setProperty("--primary-foreground", "0 0% 0%");
+        document.documentElement.style.setProperty("--secondary", "0 0% 10%");
+        document.documentElement.style.setProperty("--secondary-foreground", "0 0% 100%");
+        document.documentElement.style.setProperty("--muted", "0 0% 15%");
+        document.documentElement.style.setProperty("--muted-foreground", "0 0% 65%");
+        document.documentElement.style.setProperty("--accent", "217 91% 60%");
+        document.documentElement.style.setProperty("--accent-foreground", "0 0% 0%");
+        document.documentElement.style.setProperty("--border", "0 0% 15%");
+        document.documentElement.style.setProperty("--input", "0 0% 15%");
+        document.documentElement.style.setProperty("--ring", "217 91% 60%");
+      } else if (theme === "black-red") {
+        document.documentElement.style.setProperty("--background", "0 0% 0%");
+        document.documentElement.style.setProperty("--foreground", "0 0% 100%");
+        document.documentElement.style.setProperty("--card", "0 0% 6%");
+        document.documentElement.style.setProperty("--card-foreground", "0 0% 100%");
+        document.documentElement.style.setProperty("--popover", "0 0% 6%");
+        document.documentElement.style.setProperty("--popover-foreground", "0 0% 100%");
+        document.documentElement.style.setProperty("--primary", "0 84% 60%");
+        document.documentElement.style.setProperty("--primary-foreground", "0 0% 0%");
+        document.documentElement.style.setProperty("--secondary", "0 0% 10%");
+        document.documentElement.style.setProperty("--secondary-foreground", "0 0% 100%");
+        document.documentElement.style.setProperty("--muted", "0 0% 15%");
+        document.documentElement.style.setProperty("--muted-foreground", "0 0% 65%");
+        document.documentElement.style.setProperty("--accent", "0 84% 60%");
+        document.documentElement.style.setProperty("--accent-foreground", "0 0% 0%");
+        document.documentElement.style.setProperty("--border", "0 0% 15%");
+        document.documentElement.style.setProperty("--input", "0 0% 15%");
+        document.documentElement.style.setProperty("--ring", "0 84% 60%");
+      } else if (theme === "blue-black") {
+        document.documentElement.style.setProperty("--background", "224 100% 30%");
+        document.documentElement.style.setProperty("--foreground", "0 0% 100%");
+        document.documentElement.style.setProperty("--card", "224 100% 35%");
+        document.documentElement.style.setProperty("--card-foreground", "0 0% 100%");
+        document.documentElement.style.setProperty("--popover", "224 100% 35%");
+        document.documentElement.style.setProperty("--popover-foreground", "0 0% 100%");
+        document.documentElement.style.setProperty("--primary", "217 91% 60%");
+        document.documentElement.style.setProperty("--primary-foreground", "0 0% 0%");
+        document.documentElement.style.setProperty("--secondary", "224 100% 40%");
+        document.documentElement.style.setProperty("--secondary-foreground", "0 0% 100%");
+        document.documentElement.style.setProperty("--muted", "224 100% 40%");
+        document.documentElement.style.setProperty("--muted-foreground", "0 0% 80%");
+        document.documentElement.style.setProperty("--accent", "217 91% 60%");
+        document.documentElement.style.setProperty("--accent-foreground", "0 0% 0%");
+        document.documentElement.style.setProperty("--border", "224 100% 40%");
+        document.documentElement.style.setProperty("--input", "224 100% 40%");
+        document.documentElement.style.setProperty("--ring", "217 91% 60%");
+      } else if (theme === "white-darkblue") {
+        document.documentElement.style.setProperty("--background", "0 0% 100%");
+        document.documentElement.style.setProperty("--foreground", "224 100% 30%");
+        document.documentElement.style.setProperty("--card", "0 0% 96%");
+        document.documentElement.style.setProperty("--card-foreground", "224 100% 30%");
+        document.documentElement.style.setProperty("--popover", "0 0% 96%");
+        document.documentElement.style.setProperty("--popover-foreground", "224 100% 30%");
+        document.documentElement.style.setProperty("--primary", "224 100% 30%");
+        document.documentElement.style.setProperty("--primary-foreground", "0 0% 100%");
+        document.documentElement.style.setProperty("--secondary", "0 0% 90%");
+        document.documentElement.style.setProperty("--secondary-foreground", "224 100% 30%");
+        document.documentElement.style.setProperty("--muted", "0 0% 90%");
+        document.documentElement.style.setProperty("--muted-foreground", "224 60% 60%");
+        document.documentElement.style.setProperty("--accent", "224 100% 30%");
+        document.documentElement.style.setProperty("--accent-foreground", "0 0% 100%");
+        document.documentElement.style.setProperty("--border", "0 0% 80%");
+        document.documentElement.style.setProperty("--input", "0 0% 80%");
+        document.documentElement.style.setProperty("--ring", "224 100% 30%");
+      }
+    }
+    
+    console.log("Theme updated:", theme);
+  };
+
+  const changeTheme = (theme: string) => {
+    setCurrentTheme(theme);
+    applyTheme(theme);
+  };
+
+  return (
+    <ThemeContext.Provider value={{ currentTheme, changeTheme }}>
+      {children}
+    </ThemeContext.Provider>
+  );
+};
+
+export const useTheme = (): ThemeContextType => {
+  const context = useContext(ThemeContext);
+  if (context === undefined) {
+    throw new Error("useTheme must be used within a ThemeProvider");
+  }
+  return context;
+};
+
+======================= BatchProcessingContext.tsx =======================
+import React, { createContext, useContext, useState, useCallback, useReducer } from 'react';
+import { useToast } from '@/hooks/use-toast';
+import { AIModel } from '@/components/ai/ModelSelectionDropdown';
+
+// Define the types for processing state
+export type ProcessingStatus = 'idle' | 'processing' | 'success' | 'error' | 'cancelled';
+
+export type ProcessingFile = {
+  id: string;
+  file: File;
+  originalName: string;
+  newName?: string;
+  suggestedNames?: string[];
+  status: ProcessingStatus;
+  error?: string;
+  metadata?: Record<string, any>;
+  preview?: string;
+  selected?: boolean;
+};
+
+export type BatchProcessingState = {
+  files: ProcessingFile[];
+  allFiles: ProcessingFile[];
+  status: ProcessingStatus;
+  progress: number;
+  activeModelId: string | null;
+  error?: string;
+  selectedFolder?: string;
+  targetFolder?: string;
+};
+
+type BatchProcessingAction =
+  | { type: 'ADD_FILES'; payload: ProcessingFile[] }
+  | { type: 'REMOVE_FILE'; payload: string }
+  | { type: 'CLEAR_FILES' }
+  | { type: 'SET_STATUS'; payload: ProcessingStatus }
+  | { type: 'SET_PROGRESS'; payload: number }
+  | { type: 'SET_ERROR'; payload: string | undefined }
+  | { type: 'SET_ACTIVE_MODEL'; payload: string | null }
+  | { type: 'UPDATE_FILE'; payload: { id: string; updates: Partial<ProcessingFile> } }
+  | { type: 'UPDATE_FILE_STATUS'; payload: { id: string; status: ProcessingStatus; error?: string } }
+  | { type: 'SELECT_FILE'; payload: { id: string; selected: boolean } }
+  | { type: 'SELECT_ALL_FILES'; payload: boolean }
+  | { type: 'SET_FOLDER'; payload: string }
+  | { type: 'SET_TARGET_FOLDER'; payload: string };
+
+type BatchProcessingContextType = {
+  state: BatchProcessingState;
+  addFiles: (files: File[]) => void;
+  removeFile: (id: string) => void;
+  clearFiles: () => void;
+  updateFileStatus: (id: string, status: ProcessingStatus, error?: string) => void;
+  updateFile: (id: string, updates: Partial<ProcessingFile>) => void;
+  startProcessing: (modelId: string) => void;
+  cancelProcessing: () => void;
+  completeProcessing: (success: boolean, error?: string) => void;
+  selectFile: (id: string, selected: boolean) => void;
+  selectAllFiles: (selected: boolean) => void;
+  setFolder: (folder: string) => void;
+  setTargetFolder: (folder: string) => void;
+  isProcessing: boolean;
+  hasFiles: boolean;
+  selectedFiles: ProcessingFile[];
+  processedCount: number;
+  failedCount: number;
+};
+
+const initialState: BatchProcessingState = {
+  files: [],
+  allFiles: [],
+  status: 'idle',
+  progress: 0,
+  activeModelId: null,
+};
+
+// Create the context
+const BatchProcessingContext = createContext<BatchProcessingContextType | null>(null);
+
+// Reducer function to update state
+function batchProcessingReducer(state: BatchProcessingState, action: BatchProcessingAction): BatchProcessingState {
+  switch (action.type) {
+    case 'ADD_FILES':
+      return {
+        ...state,
+        files: [...state.files, ...action.payload],
+        allFiles: [...state.allFiles, ...action.payload],
+      };
+    case 'REMOVE_FILE':
+      return {
+        ...state,
+        files: state.files.filter((file) => file.id !== action.payload),
+        allFiles: state.allFiles.filter((file) => file.id !== action.payload),
+      };
+    case 'CLEAR_FILES':
+      return {
+        ...state,
+        files: [],
+        allFiles: [],
+        status: 'idle',
+        progress: 0,
+        error: undefined,
+      };
+    case 'SET_STATUS':
+      return {
+        ...state,
+        status: action.payload,
+        // Reset progress if returning to idle
+        progress: action.payload === 'idle' ? 0 : state.progress,
+      };
+    case 'SET_PROGRESS':
+      return {
+        ...state,
+        progress: action.payload,
+      };
+    case 'SET_ERROR':
+      return {
+        ...state,
+        error: action.payload,
+      };
+    case 'SET_ACTIVE_MODEL':
+      return {
+        ...state,
+        activeModelId: action.payload,
+      };
+    case 'UPDATE_FILE': {
+      const updatedFiles = state.files.map((file) =>
+        file.id === action.payload.id ? { ...file, ...action.payload.updates } : file
+      );
+      const updatedAllFiles = state.allFiles.map((file) =>
+        file.id === action.payload.id ? { ...file, ...action.payload.updates } : file
+      );
+      return {
+        ...state,
+        files: updatedFiles,
+        allFiles: updatedAllFiles,
+      };
+    }
+    case 'UPDATE_FILE_STATUS': {
+      const updatedFiles = state.files.map((file) =>
+        file.id === action.payload.id
+          ? { ...file, status: action.payload.status, error: action.payload.error }
+          : file
+      );
+      const updatedAllFiles = state.allFiles.map((file) =>
+        file.id === action.payload.id
+          ? { ...file, status: action.payload.status, error: action.payload.error }
+          : file
+      );
+      return {
+        ...state,
+        files: updatedFiles,
+        allFiles: updatedAllFiles,
+      };
+    }
+    case 'SELECT_FILE': {
+      const updatedFiles = state.files.map((file) =>
+        file.id === action.payload.id ? { ...file, selected: action.payload.selected } : file
+      );
+      const updatedAllFiles = state.allFiles.map((file) =>
+        file.id === action.payload.id ? { ...file, selected: action.payload.selected } : file
+      );
+      return {
+        ...state,
+        files: updatedFiles,
+        allFiles: updatedAllFiles,
+      };
+    }
+    case 'SELECT_ALL_FILES': {
+      const updatedFiles = state.files.map((file) => ({ ...file, selected: action.payload }));
+      const updatedAllFiles = state.allFiles.map((file) => ({ ...file, selected: action.payload }));
+      return {
+        ...state,
+        files: updatedFiles,
+        allFiles: updatedAllFiles,
+      };
+    }
+    case 'SET_FOLDER':
+      return {
+        ...state,
+        selectedFolder: action.payload,
+        // Only show files in the selected folder
+        files: action.payload
+          ? state.allFiles.filter((file) => file.metadata?.folder === action.payload)
+          : state.allFiles,
+      };
+    case 'SET_TARGET_FOLDER':
+      return {
+        ...state,
+        targetFolder: action.payload,
+      };
+    default:
+      return state;
+  }
+}
+
+// Create the provider component
+export function BatchProcessingProvider({ children }: { children: React.ReactNode }) {
+  const [state, dispatch] = useReducer(batchProcessingReducer, initialState);
+  const { toast } = useToast();
+
+  // Generate a unique ID for each file
+  const generateFileId = () => `file-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+  // Add files to the batch
+  const addFiles = useCallback((files: File[]) => {
+    const newFiles: ProcessingFile[] = files.map((file) => ({
+      id: generateFileId(),
+      file,
+      originalName: file.name,
+      status: 'idle',
+      selected: true,
+    }));
+
+    dispatch({ type: 'ADD_FILES', payload: newFiles });
+
+    toast({
+      title: `${files.length} file(s) added`,
+      description: `Ready to process ${files.length} file(s)`,
+    });
+  }, [toast]);
+
+  // Remove a file from the batch
+  const removeFile = useCallback((id: string) => {
+    dispatch({ type: 'REMOVE_FILE', payload: id });
+  }, []);
+
+  // Clear all files
+  const clearFiles = useCallback(() => {
+    dispatch({ type: 'CLEAR_FILES' });
+    toast({
+      title: 'All files cleared',
+      description: 'The file list has been cleared',
+    });
+  }, [toast]);
+
+  // Update a file's status
+  const updateFileStatus = useCallback((id: string, status: ProcessingStatus, error?: string) => {
+    dispatch({ type: 'UPDATE_FILE_STATUS', payload: { id, status, error } });
+  }, []);
+
+  // Update a file with partial data
+  const updateFile = useCallback((id: string, updates: Partial<ProcessingFile>) => {
+    dispatch({ type: 'UPDATE_FILE', payload: { id, updates } });
+  }, []);
+
+  // Start processing the batch
+  const startProcessing = useCallback((modelId: string) => {
+    dispatch({ type: 'SET_STATUS', payload: 'processing' });
+    dispatch({ type: 'SET_ACTIVE_MODEL', payload: modelId });
+    dispatch({ type: 'SET_PROGRESS', payload: 0 });
+    dispatch({ type: 'SET_ERROR', payload: undefined });
+    toast({
+      title: 'Processing started',
+      description: `Processing ${state.files.filter(file => file.selected).length} file(s)`,
+    });
+  }, [state.files, toast]);
+
+  // Cancel processing
+  const cancelProcessing = useCallback(() => {
+    dispatch({ type: 'SET_STATUS', payload: 'cancelled' });
+    toast({
+      title: 'Processing cancelled',
+      description: 'The file processing has been cancelled',
+      variant: 'destructive',
+    });
+  }, [toast]);
+
+  // Complete processing
+  const completeProcessing = useCallback((success: boolean, error?: string) => {
+    dispatch({ type: 'SET_STATUS', payload: success ? 'success' : 'error' });
+    dispatch({ type: 'SET_PROGRESS', payload: 100 });
+    if (error) {
+      dispatch({ type: 'SET_ERROR', payload: error });
+    }
+
+    toast({
+      title: success ? 'Processing complete' : 'Processing failed',
+      description: success
+        ? `Successfully processed ${state.files.filter(f => f.status === 'success').length} file(s)`
+        : error || 'An error occurred during processing',
+      variant: success ? 'default' : 'destructive',
+    });
+  }, [state.files, toast]);
+
+  // Select/deselect a file
+  const selectFile = useCallback((id: string, selected: boolean) => {
+    dispatch({ type: 'SELECT_FILE', payload: { id, selected } });
+  }, []);
+
+  // Select/deselect all files
+  const selectAllFiles = useCallback((selected: boolean) => {
+    dispatch({ type: 'SELECT_ALL_FILES', payload: selected });
+  }, []);
+
+  // Set the current folder filter
+  const setFolder = useCallback((folder: string) => {
+    dispatch({ type: 'SET_FOLDER', payload: folder });
+  }, []);
+
+  // Set the target folder for move operations
+  const setTargetFolder = useCallback((folder: string) => {
+    dispatch({ type: 'SET_TARGET_FOLDER', payload: folder });
+  }, []);
+
+  // Calculate derived state
+  const isProcessing = state.status === 'processing';
+  const hasFiles = state.files.length > 0;
+  const selectedFiles = state.files.filter((file) => file.selected);
+  const processedCount = state.files.filter((file) => file.status === 'success').length;
+  const failedCount = state.files.filter((file) => file.status === 'error').length;
+
+  // Create the context value
+  const contextValue: BatchProcessingContextType = {
+    state,
+    addFiles,
+    removeFile,
+    clearFiles,
+    updateFileStatus,
+    updateFile,
+    startProcessing,
+    cancelProcessing,
+    completeProcessing,
+    selectFile,
+    selectAllFiles,
+    setFolder,
+    setTargetFolder,
+    isProcessing,
+    hasFiles,
+    selectedFiles,
+    processedCount,
+    failedCount,
+  };
+
+  return (
+    <BatchProcessingContext.Provider value={contextValue}>
+      {children}
+    </BatchProcessingContext.Provider>
+  );
+}
+
+// Hook to use the batch processing context
+export function useBatchProcessing() {
+  const context = useContext(BatchProcessingContext);
+  if (!context) {
+    throw new Error('useBatchProcessing must be used within a BatchProcessingProvider');
+  }
+  return context;
+}
+
+======================= use-auth.tsx =======================
+import { createContext, ReactNode, useContext } from "react";
+import {
+  useQuery,
+  useMutation,
+  UseMutationResult,
+} from "@tanstack/react-query";
+import { useToast } from "@/hooks/use-toast";
+import { getQueryFn, apiRequest, queryClient } from "@/lib/queryClient";
+
+// Define user interface
+export interface User {
+  id: number;
+  username: string;
+  email: string;
+  name?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface LoginData {
+  username: string;
+  password: string;
+}
+
+export interface RegisterData extends LoginData {
+  email: string;
+  name?: string;
+}
+
+type AuthContextType = {
+  user: User | null;
+  isLoading: boolean;
+  error: Error | null;
+  loginMutation: UseMutationResult<User, Error, LoginData>;
+  logoutMutation: UseMutationResult<void, Error, void>;
+  registerMutation: UseMutationResult<User, Error, RegisterData>;
+};
+
+export const AuthContext = createContext<AuthContextType | null>(null);
+
+export function AuthProvider({ children }: { children: ReactNode }) {
+  const { toast } = useToast();
+  const {
+    data: user,
+    error,
+    isLoading,
+  } = useQuery<User | null, Error>({
+    queryKey: ["/api/user"],
+    queryFn: getQueryFn({ on401: "returnNull" }),
+  });
+
+  const loginMutation = useMutation({
+    mutationFn: async (credentials: LoginData) => {
+      const res = await apiRequest("POST", "/api/login", credentials);
+      return await res.json();
+    },
+    onSuccess: (user: User) => {
+      queryClient.setQueryData(["/api/user"], user);
+      toast({
+        title: "Welcome back!",
+        description: `You are now logged in as ${user.username}`,
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Login failed",
+        description: error.message || "Invalid username or password",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const registerMutation = useMutation({
+    mutationFn: async (userData: RegisterData) => {
+      const res = await apiRequest("POST", "/api/register", userData);
+      return await res.json();
+    },
+    onSuccess: (user: User) => {
+      queryClient.setQueryData(["/api/user"], user);
+      toast({
+        title: "Registration successful!",
+        description: `Welcome ${user.username}! Your account has been created.`,
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Registration failed",
+        description: error.message || "There was an error creating your account",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const logoutMutation = useMutation({
+    mutationFn: async () => {
+      await apiRequest("POST", "/api/logout");
+    },
+    onSuccess: () => {
+      queryClient.setQueryData(["/api/user"], null);
+      toast({
+        title: "Logged out",
+        description: "You have been successfully logged out",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Logout failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  return (
+    <AuthContext.Provider
+      value={{
+        user: user || null,
+        isLoading,
+        error,
+        loginMutation,
+        logoutMutation,
+        registerMutation,
+      }}
+    >
+      {children}
+    </AuthContext.Provider>
+  );
+}
+
+export function useAuth() {
+  const context = useContext(AuthContext);
+  if (!context) {
+    throw new Error("useAuth must be used within an AuthProvider");
+  }
+  return context;
+}
+
+======================= protected-route.tsx =======================
+import React from 'react';
+import { useAuth } from '@/hooks/use-auth';
+import { Loader2 } from 'lucide-react';
+import { Route, Redirect } from 'wouter';
+
+type ProtectedRouteProps = {
+  path: string;
+  component: React.ComponentType;
+};
+
+export function ProtectedRoute({
+  path,
+  component: Component,
+}: ProtectedRouteProps) {
+  const { user, isLoading } = useAuth();
+
+  return (
+    <Route path={path}>
+      {() => {
+        if (isLoading) {
+          return (
+            <div className="flex items-center justify-center min-h-screen">
+              <Loader2 className="h-8 w-8 animate-spin text-border" />
+            </div>
+          );
+        }
+
+        if (!user) {
+          return <Redirect to="/auth" />;
+        }
+
+        return <Component />;
+      }}
+    </Route>
+  );
+}
+
+======================= auth-page.tsx =======================
+import React, { useEffect, useState } from 'react';
+import { useLocation } from 'wouter';
+import { useAuth } from '@/hooks/use-auth';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Loader2 } from 'lucide-react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+
+const loginSchema = z.object({
+  username: z.string().min(3, "Username must be at least 3 characters"),
+  password: z.string().min(6, "Password must be at least 6 characters"),
+});
+
+const registerSchema = z.object({
+  username: z.string().min(3, "Username must be at least 3 characters"),
+  email: z.string().email("Please enter a valid email address"),
+  password: z.string().min(6, "Password must be at least 6 characters"),
+  confirmPassword: z.string(),
+}).refine(data => data.password === data.confirmPassword, {
+  message: "Passwords do not match",
+  path: ["confirmPassword"],
+});
+
+type LoginFormValues = z.infer<typeof loginSchema>;
+type RegisterFormValues = z.infer<typeof registerSchema>;
+
+const AuthPage: React.FC = () => {
+  const { user, loginMutation, registerMutation } = useAuth();
+  const [, navigate] = useLocation();
+  const [activeTab, setActiveTab] = useState<string>("login");
+  
+  // Redirect if user is already logged in
+  useEffect(() => {
+    if (user) {
+      navigate("/");
+    }
+  }, [user, navigate]);
+  
+  // Login form
+  const loginForm = useForm<LoginFormValues>({
+    resolver: zodResolver(loginSchema),
+    defaultValues: {
+      username: "",
+      password: "",
+    },
+  });
+  
+  // Register form
+  const registerForm = useForm<RegisterFormValues>({
+    resolver: zodResolver(registerSchema),
+    defaultValues: {
+      username: "",
+      email: "",
+      password: "",
+      confirmPassword: "",
+    },
+  });
+  
+  // Handle login form submission
+  const onLoginSubmit = (data: LoginFormValues) => {
+    loginMutation.mutate(data);
+  };
+  
+  // Handle register form submission
+  const onRegisterSubmit = (data: RegisterFormValues) => {
+    const { confirmPassword, ...registerData } = data;
+    registerMutation.mutate(registerData);
+  };
+  
+  return (
+    <div className="container flex h-screen w-full flex-col items-center justify-center">
+      <div className="mx-auto grid w-full max-w-[1000px] gap-6 md:grid-cols-2 lg:gap-12">
+        {/* Hero section */}
+        <div className="flex flex-col justify-center space-y-4">
+          <div className="space-y-2">
+            <h1 className="text-3xl font-bold tracking-tight sm:text-4xl md:text-5xl">
+              NameWizard.io
+            </h1>
+            <p className="text-muted-foreground md:text-xl">
+              AI-powered file renaming and organization
+            </p>
+          </div>
+          
+          <div className="space-y-2 text-muted-foreground">
+            <p>
+              NameWizard.io is an intelligent file management platform that
+              uses AI to help you rename, organize, and manage your files.
+            </p>
+            <ul className="list-disc list-inside space-y-1">
+              <li>Rename files intelligently based on content</li>
+              <li>Auto-organize files into logical folders</li>
+              <li>Batch process multiple files at once</li>
+              <li>Secure and private file handling</li>
+              <li>Cloud storage integration</li>
+            </ul>
+          </div>
+        </div>
+        
+        {/* Auth form */}
+        <div className="mx-auto flex w-full flex-col justify-center space-y-6 sm:w-[350px]">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-2xl">Authentication</CardTitle>
+              <CardDescription>
+                Login or create an account to get started
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Tabs 
+                defaultValue="login" 
+                value={activeTab} 
+                onValueChange={setActiveTab}
+                className="w-full"
+              >
+                <TabsList className="grid w-full grid-cols-2">
+                  <TabsTrigger value="login">Login</TabsTrigger>
+                  <TabsTrigger value="register">Register</TabsTrigger>
+                </TabsList>
+                
+                <TabsContent value="login" className="mt-4">
+                  <Form {...loginForm}>
+                    <form onSubmit={loginForm.handleSubmit(onLoginSubmit)} className="space-y-4">
+                      <FormField
+                        control={loginForm.control}
+                        name="username"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Username</FormLabel>
+                            <FormControl>
+                              <Input placeholder="Enter your username" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      
+                      <FormField
+                        control={loginForm.control}
+                        name="password"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Password</FormLabel>
+                            <FormControl>
+                              <Input type="password" placeholder="Enter your password" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      
+                      <Button 
+                        type="submit" 
+                        className="w-full" 
+                        disabled={loginMutation.isPending}
+                      >
+                        {loginMutation.isPending ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Logging in...
+                          </>
+                        ) : "Login"}
+                      </Button>
+                    </form>
+                  </Form>
+                </TabsContent>
+                
+                <TabsContent value="register" className="mt-4">
+                  <Form {...registerForm}>
+                    <form onSubmit={registerForm.handleSubmit(onRegisterSubmit)} className="space-y-4">
+                      <FormField
+                        control={registerForm.control}
+                        name="username"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Username</FormLabel>
+                            <FormControl>
+                              <Input placeholder="Choose a username" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      
+                      <FormField
+                        control={registerForm.control}
+                        name="email"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Email</FormLabel>
+                            <FormControl>
+                              <Input type="email" placeholder="Enter your email" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      
+                      <FormField
+                        control={registerForm.control}
+                        name="password"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Password</FormLabel>
+                            <FormControl>
+                              <Input type="password" placeholder="Choose a password" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      
+                      <FormField
+                        control={registerForm.control}
+                        name="confirmPassword"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Confirm Password</FormLabel>
+                            <FormControl>
+                              <Input type="password" placeholder="Confirm your password" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      
+                      <Button 
+                        type="submit" 
+                        className="w-full" 
+                        disabled={registerMutation.isPending}
+                      >
+                        {registerMutation.isPending ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Creating account...
+                          </>
+                        ) : "Register"}
+                      </Button>
+                    </form>
+                  </Form>
+                </TabsContent>
+              </Tabs>
+            </CardContent>
+            <CardFooter className="flex flex-col items-center">
+              <p className="text-xs text-muted-foreground">
+                By continuing, you agree to our Terms of Service and Privacy Policy.
+              </p>
+            </CardFooter>
+          </Card>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default AuthPage;
+
+======================= home-page.tsx =======================
+import React, { useState, useCallback } from 'react';
+import { FileDragDropZone, type FileDragDropZoneProps } from '@/components/ui/FileDragDropZone';
+import { BatchProcessingProgressCard } from '@/components/ui/BatchProcessingProgressCard';
+import { ModelSelectionDropdown, type AIModel, type AIProvider } from '@/components/ai/ModelSelectionDropdown';
+import { ModelFallbackIndicator, FallbackState } from '@/components/ai/ModelFallbackIndicator';
+import { useBatchProcessing } from '@/context/BatchProcessingContext';
+import { Button } from '@/components/ui/button';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Separator } from '@/components/ui/separator';
+import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/hooks/use-auth';
+import { fileLogger } from '@/utils/logger';
+import { Loader2, Settings, FolderTree, Wand2, ArrowRight } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { v4 as uuidv4 } from 'uuid';
+
+interface FileItem {
+  id: string;
+  name: string;
+  originalName: string;
+  size: number;
+  type: string;
+  preview?: string;
+  status: 'idle' | 'processing' | 'success' | 'error';
+  newName?: string;
+  suggestedNames?: string[];
+  selected?: boolean;
+  errorMessage?: string;
+}
+
+interface ProcessingOptions {
+  useAI: boolean;
+  selectedModel: AIModel | null;
+  includeMetadata: boolean;
+  customPattern: string;
+  customRules: string;
+  autoOrganizeIntoFolders: boolean;
+  preserveOriginalFiles: boolean;
+}
+
+const HomePage: React.FC = () => {
+  const { user } = useAuth();
+  const { startProcessing, updateProgress, completeProcessing, cancelProcessing } = useBatchProcessing();
+  const { toast } = useToast();
+  
+  // Files state
+  const [files, setFiles] = useState<FileItem[]>([]);
+  const [selectedFileIds, setSelectedFileIds] = useState<string[]>([]);
+  
+  // Available AI models
+  const [availableModels] = useState<AIModel[]>([
+    {
+      id: 'gpt-4o',
+      name: 'GPT-4o',
+      provider: 'openai',
+      isAvailable: true,
+      tier: 'premium',
+      isMultimodal: true
+    },
+    {
+      id: 'claude-3-5-sonnet',
+      name: 'Claude 3.5 Sonnet',
+      provider: 'anthropic',
+      isAvailable: true,
+      tier: 'premium',
+      isMultimodal: true
+    }
+  ]);
+  
+  // Processing options state
+  const [options, setOptions] = useState<ProcessingOptions>({
+    useAI: true,
+    selectedModel: availableModels[0],
+    includeMetadata: true,
+    customPattern: '[date] [title] [index]',
+    customRules: '',
+    autoOrganizeIntoFolders: false,
+    preserveOriginalFiles: true,
+  });
+  
+  // Model fallback state
+  const [modelFallback, setModelFallback] = useState<FallbackState>({
+    active: false,
+    primaryModel: null,
+    currentModel: null,
+    triedModels: [],
+    remainingModels: [],
+    failed: false,
+    progressPercentage: 0
+  });
+  
+  // Handle file uploads
+  const handleFilesAdded = useCallback((newFiles: any[]) => {
+    const fileItems = newFiles.map(file => ({
+      id: file.id,
+      name: file.name,
+      originalName: file.name,
+      size: file.size,
+      type: file.type,
+      preview: file.preview,
+      status: 'idle' as const
+    }));
+    
+    setFiles(prev => [...prev, ...fileItems]);
+    fileLogger.info(`Added ${newFiles.length} files`);
+    
+    toast({
+      title: `${newFiles.length} file${newFiles.length === 1 ? '' : 's'} added`,
+      description: "Use the settings below to configure how files should be renamed."
+    });
+  }, [toast]);
+  
+  // Handle file removal
+  const handleRemoveFile = useCallback((id: string) => {
+    setFiles(prev => prev.filter(file => file.id !== id));
+    setSelectedFileIds(prev => prev.filter(fileId => fileId !== id));
+  }, []);
+  
+  // Handle bulk file selection
+  const handleSelectFile = useCallback((id: string, selected: boolean) => {
+    if (selected) {
+      setSelectedFileIds(prev => [...prev, id]);
+    } else {
+      setSelectedFileIds(prev => prev.filter(fileId => fileId !== id));
+    }
+  }, []);
+  
+  // Simulate file processing with AI
+  const simulateProcessing = useCallback(async () => {
+    if (files.length === 0) {
+      toast({
+        title: "No files to process",
+        description: "Please add files first.",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    // Start batch processing
+    startProcessing(files.length);
+    
+    // Update files to processing state
+    setFiles(prev => 
+      prev.map(file => ({
+        ...file,
+        status: 'processing'
+      }))
+    );
+    
+    // Simulate model fallback for demonstration
+    if (options.useAI) {
+      setModelFallback({
+        ...modelFallback,
+        active: true,
+        primaryModel: options.selectedModel,
+        currentModel: options.selectedModel,
+        progressPercentage: 5
+      });
+      
+      // Simulate model fallback after 2 seconds
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      // "First model failed"
+      setModelFallback(prev => ({
+        ...prev,
+        currentModel: 'claude_3_5_sonnet',
+        triedModels: [options.selectedModel],
+        remainingModels: ['gpt_4o_mini', 'gpt_3_5_turbo'],
+        progressPercentage: 25
+      }));
+    }
+    
+    // Process each file with a delay
+    let processed = 0;
+    let failed = 0;
+    
+    for (const file of files) {
+      // Simulate processing delay
+      await new Promise(resolve => setTimeout(resolve, 500 + Math.random() * 1000));
+      
+      try {
+        // Generate a "suggested" name
+        const suggestionCount = Math.floor(Math.random() * 3) + 1;
+        const suggestions: string[] = [];
+        
+        if (options.useAI) {
+          // Different naming patterns based on file type
+          if (file.type.includes('image')) {
+            for (let i = 0; i < suggestionCount; i++) {
+              suggestions.push(`Photo_${new Date().toISOString().slice(0, 10)}_${i+1}.${file.name.split('.').pop()}`);
+            }
+          } else if (file.type.includes('pdf')) {
+            for (let i = 0; i < suggestionCount; i++) {
+              suggestions.push(`Document_${new Date().getFullYear()}_${i+1}.${file.name.split('.').pop()}`);
+            }
+          } else {
+            for (let i = 0; i < suggestionCount; i++) {
+              suggestions.push(`File_${new Date().toISOString().slice(0, 10)}_${i+1}.${file.name.split('.').pop()}`);
+            }
+          }
+        } else {
+          // Use pattern-based naming
+          const date = new Date().toISOString().slice(0, 10);
+          const title = file.name.split('.')[0].replace(/[^a-zA-Z0-9]/g, '_');
+          const extension = file.name.split('.').pop();
+          
+          suggestions.push(options.customPattern
+            .replace('[date]', date)
+            .replace('[title]', title)
+            .replace('[index]', '1') + '.' + extension);
+        }
+        
+        // Update file with success
+        setFiles(prev => 
+          prev.map(f => f.id === file.id ? {
+            ...f,
+            status: 'success',
+            suggestedNames: suggestions,
+            newName: suggestions[0]
+          } : f)
+        );
+        
+        processed++;
+      } catch (error) {
+        failed++;
+        
+        // Update file with error
+        setFiles(prev => 
+          prev.map(f => f.id === file.id ? {
+            ...f,
+            status: 'error',
+            errorMessage: 'Failed to process file'
+          } : f)
+        );
+      }
+      
+      // Update progress
+      updateProgress(processed, failed);
+    }
+    
+    // Complete the batch
+    completeProcessing();
+    
+    // Complete model fallback
+    if (options.useAI) {
+      setModelFallback(prev => ({
+        ...prev,
+        active: false,
+        progressPercentage: 100
+      }));
+    }
+    
+    toast({
+      title: "Processing complete",
+      description: `${processed} files processed, ${failed} failed`,
+      variant: failed > 0 ? "destructive" : "default"
+    });
+  }, [files, options, modelFallback, startProcessing, updateProgress, completeProcessing, toast]);
+  
+  // Apply suggested names
+  const applyRenaming = useCallback(() => {
+    const renamedCount = files.filter(file => 
+      file.status === 'success' && 
+      file.newName && 
+      file.newName !== file.originalName
+    ).length;
+    
+    if (renamedCount === 0) {
+      toast({
+        title: "No files to rename",
+        description: "There are no successfully processed files with new names.",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    // In a real app, you would make API calls to actually rename the files
+    // For this demo, we'll just simulate success
+    
+    toast({
+      title: "Files renamed successfully",
+      description: `${renamedCount} files have been renamed.`,
+    });
+    
+    // Clear the file list after successful rename
+    setFiles([]);
+    setSelectedFileIds([]);
+  }, [files, toast]);
+  
+  return (
+    <div className="container max-w-7xl mx-auto py-6 space-y-8">
+      <div className="flex justify-between items-center">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">NameWizard.io</h1>
+          <p className="text-muted-foreground">
+            AI-powered file renaming and organization
+          </p>
+        </div>
+        
+        <div className="flex items-center gap-4">
+          {user ? (
+            <div className="text-sm text-right">
+              <p className="font-medium">{user.username}</p>
+              <p className="text-muted-foreground">{user.email}</p>
+            </div>
+          ) : (
+            <Button variant="outline" asChild>
+              <a href="/auth">Login / Register</a>
+            </Button>
+          )}
+        </div>
+      </div>
+      
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="md:col-span-2 space-y-6">
+          {/* File upload area */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle>Upload Files</CardTitle>
+              <CardDescription>
+                Drag and drop files or click to browse your device
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <FileDragDropZone
+                onFilesAdded={handleFilesAdded}
+                showFileList={true}
+                maxSize={50 * 1024 * 1024} // 50MB
+                enablePreviews={true}
+              />
+            </CardContent>
+          </Card>
+          
+          {/* File processing progress */}
+          {files.length > 0 && (
+            <BatchProcessingProgressCard
+              title="Processing Files"
+              description="Analyzing files and generating name suggestions..."
+              showCancelButton={true}
+              onClose={() => {}}
+            />
+          )}
+          
+          {/* Model fallback indicator */}
+          {modelFallback.active && (
+            <div className="mt-4">
+              <ModelFallbackIndicator state={modelFallback} detailed={true} />
+            </div>
+          )}
+          
+          {/* File preview and renaming */}
+          {files.some(file => file.status === 'success') && (
+            <Card>
+              <CardHeader className="pb-3">
+                <div className="flex justify-between items-center">
+                  <CardTitle>Rename Files</CardTitle>
+                  <Button onClick={applyRenaming}>
+                    Apply Renaming
+                  </Button>
+                </div>
+                <CardDescription>
+                  Review and customize the suggested file names
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {files.map(file => (
+                    file.status === 'success' && (
+                      <div 
+                        key={file.id} 
+                        className="border rounded-md p-4 flex items-start gap-4"
+                      >
+                        {/* File preview/icon */}
+                        <div className="h-16 w-16 rounded overflow-hidden flex-shrink-0 border bg-muted flex items-center justify-center">
+                          {file.preview ? (
+                            <img 
+                              src={file.preview} 
+                              alt={file.name} 
+                              className="h-full w-full object-cover"
+                            />
+                          ) : (
+                            <div className="text-muted-foreground">
+                              {file.type.includes('image') ? (
+                                <svg className="h-8 w-8" fill="none" viewBox="0 0 24 24">
+                                  <path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M21 12c0 4.97-4.03 9-9 9s-9-4.03-9-9 4.03-9 9-9 9 4.03 9 9z"/>
+                                  <path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M9 10a1 1 0 100-2 1 1 0 000 2z"/>
+                                  <path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M5 15l3-3a1 1 0 011.41 0L17 19"/>
+                                  <path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M14 16l2-2a1 1 0 011.41 0L19 16"/>
+                                </svg>
+                              ) : file.type.includes('pdf') ? (
+                                <svg className="h-8 w-8" fill="none" viewBox="0 0 24 24">
+                                  <path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M19 16V5c0-1.1-.9-2-2-2H7c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2v-3z"/>
+                                  <path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M16 13H8"/>
+                                  <path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M16 17H8"/>
+                                  <path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M10 9H8"/>
+                                </svg>
+                              ) : (
+                                <svg className="h-8 w-8" fill="none" viewBox="0 0 24 24">
+                                  <path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M19 16V5c0-1.1-.9-2-2-2H7c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2v-3z"/>
+                                  <path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M12 11V7"/>
+                                  <path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M10 9h4"/>
+                                </svg>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                        
+                        {/* File details */}
+                        <div className="flex-1 min-w-0 space-y-2">
+                          <div>
+                            <h4 className="font-medium">Original Name</h4>
+                            <p className="text-sm text-muted-foreground break-all">{file.originalName}</p>
+                          </div>
+                          
+                          <div>
+                            <h4 className="font-medium flex items-center gap-2">
+                              New Name
+                              {options.useAI && <span className="text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full">AI Generated</span>}
+                            </h4>
+                            <Input 
+                              value={file.newName || ''}
+                              onChange={(e) => {
+                                setFiles(prev => 
+                                  prev.map(f => f.id === file.id ? {
+                                    ...f,
+                                    newName: e.target.value
+                                  } : f)
+                                );
+                              }}
+                              className="mt-1"
+                            />
+                          </div>
+                          
+                          {file.suggestedNames && file.suggestedNames.length > 1 && (
+                            <div>
+                              <h4 className="font-medium">Other Suggestions</h4>
+                              <div className="flex flex-wrap gap-2 mt-1">
+                                {file.suggestedNames.slice(1).map((name, idx) => (
+                                  <Button 
+                                    key={idx} 
+                                    variant="outline" 
+                                    size="sm"
+                                    onClick={() => {
+                                      setFiles(prev => 
+                                        prev.map(f => f.id === file.id ? {
+                                          ...f,
+                                          newName: name
+                                        } : f)
+                                      );
+                                    }}
+                                  >
+                                    {name}
+                                  </Button>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+        
+        <div className="space-y-6">
+          {/* Settings panel */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2">
+                <Settings className="h-5 w-5" />
+                Renaming Settings
+              </CardTitle>
+              <CardDescription>
+                Configure how your files will be renamed
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Tabs defaultValue="ai" className="w-full">
+                <TabsList className="grid w-full grid-cols-2 mb-4">
+                  <TabsTrigger 
+                    value="ai"
+                    onClick={() => setOptions(prev => ({ ...prev, useAI: true }))}
+                  >
+                    <Wand2 className="h-4 w-4 mr-2" />
+                    AI Renaming
+                  </TabsTrigger>
+                  <TabsTrigger 
+                    value="pattern"
+                    onClick={() => setOptions(prev => ({ ...prev, useAI: false }))}
+                  >
+                    <ArrowRight className="h-4 w-4 mr-2" />
+                    Pattern Renaming
+                  </TabsTrigger>
+                </TabsList>
+                
+                <TabsContent value="ai" className="space-y-4">
+                  <div className="space-y-2">
+                    <Label>AI Model</Label>
+                    <ModelSelectionDropdown
+                      selectedModel={options.selectedModel}
+                      onModelSelect={(model) => setOptions(prev => ({ ...prev, selectedModel: model }))}
+                      availableApiKeys={availableApiKeys}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Select the AI model that will analyze your files and suggest names.
+                    </p>
+                  </div>
+                  
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <Label>Include Metadata</Label>
+                      <p className="text-xs text-muted-foreground">
+                        Use file metadata (creation date, size, etc.) to improve suggestions
+                      </p>
+                    </div>
+                    <Switch
+                      checked={options.includeMetadata}
+                      onCheckedChange={(checked) => setOptions(prev => ({ ...prev, includeMetadata: checked }))}
+                    />
+                  </div>
+                </TabsContent>
+                
+                <TabsContent value="pattern" className="space-y-4">
+                  <div className="space-y-2">
+                    <Label>Naming Pattern</Label>
+                    <Input
+                      value={options.customPattern}
+                      onChange={(e) => setOptions(prev => ({ ...prev, customPattern: e.target.value }))}
+                      placeholder="[date] [title] [index]"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Use tags like [date], [title], and [index] to create a naming pattern
+                    </p>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label>Custom Rules</Label>
+                    <Textarea
+                      value={options.customRules}
+                      onChange={(e) => setOptions(prev => ({ ...prev, customRules: e.target.value }))}
+                      placeholder="E.g., Replace spaces with underscores"
+                      rows={3}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Add custom rules for more advanced renaming (optional)
+                    </p>
+                  </div>
+                </TabsContent>
+              </Tabs>
+              
+              <Separator className="my-4" />
+              
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <Label>Auto-Organize into Folders</Label>
+                    <p className="text-xs text-muted-foreground">
+                      Create folders and organize files based on content
+                    </p>
+                  </div>
+                  <Switch
+                    checked={options.autoOrganizeIntoFolders}
+                    onCheckedChange={(checked) => setOptions(prev => ({ ...prev, autoOrganizeIntoFolders: checked }))}
+                  />
+                </div>
+                
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <Label>Preserve Original Files</Label>
+                    <p className="text-xs text-muted-foreground">
+                      Keep original files after renaming
+                    </p>
+                  </div>
+                  <Switch
+                    checked={options.preserveOriginalFiles}
+                    onCheckedChange={(checked) => setOptions(prev => ({ ...prev, preserveOriginalFiles: checked }))}
+                  />
+                </div>
+              </div>
+              
+              <Button 
+                className="w-full mt-6" 
+                size="lg"
+                disabled={files.length === 0}
+                onClick={simulateProcessing}
+              >
+                {options.useAI ? 'Generate AI Suggestions' : 'Apply Pattern Renaming'}
+              </Button>
+            </CardContent>
+          </Card>
+          
+          {/* Folder organization preview */}
+          {options.autoOrganizeIntoFolders && files.some(f => f.status === 'success') && (
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="flex items-center gap-2">
+                  <FolderTree className="h-5 w-5" />
+                  Folder Organization
+                </CardTitle>
+                <CardDescription>
+                  Preview how files will be organized
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2 text-sm">
+                  <div className="flex items-center gap-2 font-medium">
+                    <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none">
+                      <path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                    Documents
+                    <span className="text-xs text-muted-foreground ml-auto">3 files</span>
+                  </div>
+                  
+                  <div className="flex items-center gap-2 font-medium">
+                    <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none">
+                      <path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                    Images
+                    <span className="text-xs text-muted-foreground ml-auto">2 files</span>
+                  </div>
+                  
+                  <div className="flex items-center gap-2 font-medium">
+                    <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none">
+                      <path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                    Other
+                    <span className="text-xs text-muted-foreground ml-auto">1 file</span>
+                  </div>
+                </div>
+                
+                <Button variant="outline" className="w-full mt-4" size="sm">
+                  Customize Folders
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default HomePage;
+
+======================= App.tsx =======================
+import React from 'react';
+import { Switch, Route } from 'wouter';
+import { QueryClientProvider } from '@tanstack/react-query';
+import { queryClient } from '@/lib/queryClient';
+import { AuthProvider } from '@/hooks/use-auth';
+import { Toaster } from '@/components/ui/toaster';
+import { BatchProcessingProvider } from '@/context/BatchProcessingContext';
+import { ProtectedRoute } from '@/lib/protected-route';
+import { ThemeProvider } from '@/context/ThemeContext';
+
+// Pages
+import HomePage from '@/pages/home-page';
+import AuthPage from '@/pages/auth-page';
+import NotFound from '@/pages/not-found';
+
+function App() {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <ThemeProvider>
+        <AuthProvider>
+          <BatchProcessingProvider>
+            <div className="min-h-screen bg-background">
+              <main>
+                <Switch>
+                  <ProtectedRoute path="/" component={HomePage} />
+                  <Route path="/auth" component={AuthPage} />
+                  <Route component={NotFound} />
+                </Switch>
+              </main>
+              <Toaster />
+            </div>
+          </BatchProcessingProvider>
+        </AuthProvider>
+      </ThemeProvider>
+    </QueryClientProvider>
+  );
+}
+
+export default App;

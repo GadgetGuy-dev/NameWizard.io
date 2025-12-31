@@ -1,0 +1,926 @@
+import { useState, useEffect } from "react";
+import { useLocation } from "wouter";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import { 
+  Trash, 
+  RefreshCw, 
+  Plus, 
+  LogOut, 
+  CheckCircle2, 
+  AlertCircle, 
+  XCircle,
+  User,
+  History,
+  Eye,
+  ExternalLink,
+  Settings,
+  TestTube,
+  Palette
+} from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { apiRequest } from "@/lib/queryClient";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { z } from "zod";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import FileHistoryTable, { FileHistoryItem } from "@/components/file-handling/FileHistoryTable";
+import AIFeatureList from "@/components/ai-features/AIFeatureList";
+import AgentManagement from "@/components/agents/AgentManagement";
+import { AIFeature } from "@/components/ai-features/AIFeaturesCard";
+import ThemeSettings from "@/components/theme/ThemeSettings";
+import ApiKeyManager from "@/components/api-keys/ApiKeyManager";
+import { 
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+
+// Type for API key object
+type ApiKey = {
+  id: number;
+  name: string;
+  llmType: string;
+  key: string;
+  status: 'active' | 'inactive' | 'problem';
+  lastUsed?: string;
+};
+
+// Type for user profile
+type UserProfile = {
+  id: number;
+  username: string;
+  email: string;
+  fullName?: string;
+};
+
+const apiKeyFormSchema = z.object({
+  name: z.string().min(1, "Name is required"),
+  llmType: z.string().min(1, "LLM type is required"),
+  key: z.string().min(1, "API key is required"),
+});
+
+type ApiKeyFormData = z.infer<typeof apiKeyFormSchema>;
+
+const profileFormSchema = z.object({
+  username: z.string().min(3, "Username must be at least 3 characters"),
+  email: z.string().email("Please enter a valid email"),
+  fullName: z.string().optional(),
+  currentPassword: z.string().optional(),
+  newPassword: z.string().optional(),
+  confirmNewPassword: z.string().optional(),
+}).refine(
+  (data) => !data.newPassword || data.newPassword === data.confirmNewPassword,
+  {
+    message: "Passwords do not match",
+    path: ["confirmNewPassword"],
+  }
+).refine(
+  (data) => !data.newPassword || data.currentPassword,
+  {
+    message: "Current password is required to set a new password",
+    path: ["currentPassword"],
+  }
+);
+
+type ProfileFormData = z.infer<typeof profileFormSchema>;
+
+// Status badge with the correct colors based on status
+function StatusBadge({ status }: { status: 'active' | 'inactive' | 'problem' }) {
+  if (status === 'active') {
+    return (
+      <div className="inline-flex items-center px-2 py-1 rounded-full bg-green-500/10 text-green-500 text-xs font-medium">
+        <span className="inline-block w-2 h-2 rounded-full bg-green-500 mr-1.5"></span>
+        <span>Active</span>
+      </div>
+    );
+  } else if (status === 'inactive') {
+    return (
+      <div className="inline-flex items-center px-2 py-1 rounded-full bg-red-500/10 text-red-500 text-xs font-medium">
+        <span className="inline-block w-2 h-2 rounded-full bg-red-500 mr-1.5"></span>
+        <span>Inactive</span>
+      </div>
+    );
+  } else {
+    return (
+      <div className="inline-flex items-center px-2 py-1 rounded-full bg-amber-500/10 text-amber-500 text-xs font-medium">
+        <span className="inline-block w-2 h-2 rounded-full bg-amber-500 mr-1.5"></span>
+        <span>Problem</span>
+      </div>
+    );
+  }
+}
+
+// Help text for different LLM models
+const llmDescriptions: Record<string, string> = {
+  'claude_3_5_sonnet': 'Best for understanding file content and generating descriptive filenames based on context.',
+  'gpt_4o': 'Ideal for advanced text analysis and creating structured naming conventions.',
+  'llama_3': 'Suitable for local use and customization, especially for privacy-sensitive tasks.',
+  'inflection_2_5': 'Great for intuitive and user-friendly file organization based on inferred metadata.',
+  'gemini_1_5_pro': 'Excellent for handling large-scale renaming tasks with high accuracy and speed.',
+};
+
+export default function Profile() {
+  const { toast } = useToast();
+  const [_, setLocation] = useLocation();
+  const queryClient = useQueryClient();
+  const [addKeyDialogOpen, setAddKeyDialogOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState("profile");
+  
+  // Fetch user profile data
+  const { data: profileData = { username: "", email: "", fullName: "" }, isLoading: isProfileLoading } = useQuery<UserProfile>({
+    queryKey: ['/api/users/profile'],
+    staleTime: 30000,
+  });
+
+  // Fetch API keys
+  const { data: apiKeys = [], isLoading: isApiKeysLoading } = useQuery<ApiKey[]>({
+    queryKey: ['/api/api-keys'],
+    staleTime: 30000,
+  });
+  
+  // Profile form
+  const profileForm = useForm<ProfileFormData>({
+    resolver: zodResolver(profileFormSchema),
+    defaultValues: {
+      username: profileData?.username || "",
+      email: profileData?.email || "",
+      fullName: profileData?.fullName || "",
+      currentPassword: "",
+      newPassword: "",
+      confirmNewPassword: "",
+    },
+    values: {
+      username: profileData?.username || "",
+      email: profileData?.email || "",
+      fullName: profileData?.fullName || "",
+      currentPassword: "",
+      newPassword: "",
+      confirmNewPassword: "",
+    },
+  });
+  
+  // API key form
+  const apiKeyForm = useForm<ApiKeyFormData>({
+    resolver: zodResolver(apiKeyFormSchema),
+    defaultValues: {
+      name: "",
+      llmType: "",
+      key: "",
+    },
+  });
+  
+  // Update profile mutation
+  const updateProfileMutation = useMutation({
+    mutationFn: async (data: ProfileFormData) => {
+      return await apiRequest({
+        url: "/api/users/profile",
+        method: "PATCH",
+        data: data
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/users/profile'] });
+      toast({
+        title: "Profile updated",
+        description: "Your profile has been updated successfully",
+      });
+      profileForm.reset({
+        ...profileForm.getValues(),
+        currentPassword: "",
+        newPassword: "",
+        confirmNewPassword: "",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Update failed",
+        description: "Failed to update profile. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+  
+  // Add API key mutation
+  const addApiKeyMutation = useMutation({
+    mutationFn: async (data: ApiKeyFormData) => {
+      return await apiRequest({
+        url: "/api/api-keys",
+        method: "POST",
+        data: data
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/api-keys'] });
+      toast({
+        title: "API key added",
+        description: "Your API key has been added successfully",
+      });
+      apiKeyForm.reset();
+      setAddKeyDialogOpen(false);
+    },
+    onError: (error) => {
+      toast({
+        title: "Failed to add API key",
+        description: "There was an error adding your API key",
+        variant: "destructive",
+      });
+    },
+  });
+  
+  // Update API key status mutation
+  const updateApiKeyStatusMutation = useMutation({
+    mutationFn: async ({ id, status }: { id: number; status: string }) => {
+      return await apiRequest({
+        url: `/api/api-keys/${id}/status`,
+        method: "PATCH",
+        data: { status }
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/api-keys'] });
+      toast({
+        title: "Status updated",
+        description: "API key status has been updated",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Update failed",
+        description: "Failed to update API key status",
+        variant: "destructive",
+      });
+    },
+  });
+  
+  // Regenerate API key mutation
+  const regenerateApiKeyMutation = useMutation({
+    mutationFn: async (id: number) => {
+      return await apiRequest({
+        url: `/api/api-keys/${id}/regenerate`,
+        method: "POST"
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/api-keys'] });
+      toast({
+        title: "API key regenerated",
+        description: "Your API key has been regenerated successfully",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Regeneration failed",
+        description: "Failed to regenerate API key",
+        variant: "destructive",
+      });
+    },
+  });
+  
+  // Delete API key mutation
+  const deleteApiKeyMutation = useMutation({
+    mutationFn: async (id: number) => {
+      return await apiRequest({
+        url: `/api/api-keys/${id}`,
+        method: "DELETE"
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/api-keys'] });
+      toast({
+        title: "API key deleted",
+        description: "Your API key has been deleted",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Deletion failed",
+        description: "Failed to delete API key",
+        variant: "destructive",
+      });
+    },
+  });
+  
+  // Sign out function
+  const handleSignOut = async () => {
+    try {
+      await apiRequest({
+        url: "/api/auth/signout",
+        method: "POST"
+      });
+      
+      toast({
+        title: "Signed out",
+        description: "You have been signed out successfully",
+      });
+      
+      setLocation("/signin");
+    } catch (error) {
+      console.error("Sign out error:", error);
+      toast({
+        title: "Sign out failed",
+        description: "Failed to sign out. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+  
+  // Submit profile form
+  const onSubmitProfile = (data: ProfileFormData) => {
+    updateProfileMutation.mutate(data);
+  };
+  
+  // Submit API key form
+  const onSubmitApiKey = (data: ApiKeyFormData) => {
+    addApiKeyMutation.mutate(data);
+  };
+
+  return (
+    <div className="container mx-auto px-4 py-8 max-w-6xl">
+      <div className="flex justify-between items-center mb-8">
+        <h1 className="text-2xl font-bold">Account Settings</h1>
+        <Button 
+          variant="outline" 
+          className="flex items-center gap-2"
+          onClick={handleSignOut}
+        >
+          <LogOut className="h-4 w-4" />
+          Sign Out
+        </Button>
+      </div>
+      
+      <Tabs defaultValue="profile" value={activeTab} onValueChange={setActiveTab}>
+        <TabsList className="grid w-full grid-cols-6 mb-8">
+          <TabsTrigger value="profile" className="text-lg">
+            <User className="h-4 w-4 mr-2" />
+            Profile
+          </TabsTrigger>
+          <TabsTrigger value="api-keys" className="text-lg">
+            <span className="h-4 w-4 mr-2">🔑</span>
+            API Keys
+          </TabsTrigger>
+          <TabsTrigger value="file-history" className="text-lg">
+            <History className="h-4 w-4 mr-2" />
+            File History
+          </TabsTrigger>
+          <TabsTrigger value="ai-features" className="text-lg">
+            <span className="h-4 w-4 mr-2">🧠</span>
+            AI Features
+          </TabsTrigger>
+          <TabsTrigger value="agents" className="text-lg">
+            <span className="h-4 w-4 mr-2">🤖</span>
+            Agents
+          </TabsTrigger>
+          <TabsTrigger value="theme" className="text-lg">
+            <Palette className="h-4 w-4 mr-2" />
+            Theme
+          </TabsTrigger>
+        </TabsList>
+        
+        {/* Profile Tab */}
+        <TabsContent value="profile">
+          <Card>
+            <CardHeader>
+              <CardTitle>Profile Information</CardTitle>
+              <CardDescription>
+                Update your account settings and change your password
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Form {...profileForm}>
+                <form onSubmit={profileForm.handleSubmit(onSubmitProfile)} className="space-y-6">
+                  <div className="space-y-4">
+                    <FormField
+                      control={profileForm.control}
+                      name="username"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Username</FormLabel>
+                          <FormControl>
+                            <Input {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    
+                    <FormField
+                      control={profileForm.control}
+                      name="email"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Email</FormLabel>
+                          <FormControl>
+                            <Input {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    
+                    <FormField
+                      control={profileForm.control}
+                      name="fullName"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Full Name (Optional)</FormLabel>
+                          <FormControl>
+                            <Input {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                  
+                  <div className="pt-4 border-t">
+                    <h3 className="text-lg font-medium mb-4">Change Password</h3>
+                    <div className="space-y-4">
+                      <FormField
+                        control={profileForm.control}
+                        name="currentPassword"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Current Password</FormLabel>
+                            <FormControl>
+                              <Input type="password" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      
+                      <FormField
+                        control={profileForm.control}
+                        name="newPassword"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>New Password</FormLabel>
+                            <FormControl>
+                              <Input type="password" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      
+                      <FormField
+                        control={profileForm.control}
+                        name="confirmNewPassword"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Confirm New Password</FormLabel>
+                            <FormControl>
+                              <Input type="password" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+                  </div>
+                  
+                  <Button 
+                    type="submit" 
+                    className="mt-4"
+                    disabled={updateProfileMutation.isPending}
+                  >
+                    {updateProfileMutation.isPending ? "Saving..." : "Save Changes"}
+                  </Button>
+                </form>
+              </Form>
+            </CardContent>
+          </Card>
+        </TabsContent>
+        
+        {/* API Keys Tab */}
+        <TabsContent value="api-keys">
+          <Card className="bg-black border-none">
+            <CardHeader className="flex flex-row items-center justify-between">
+              <div>
+                <CardTitle>API Keys</CardTitle>
+                <CardDescription>
+                  Manage your API keys for AI models and cloud storage services
+                </CardDescription>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <ApiKeyManager />
+              {/* Tabs for API Key Management */}
+              <div className="mb-6">
+                <div className="flex space-x-1 rounded-lg bg-zinc-900 p-1">
+                  <button className="flex-1 rounded-md bg-zinc-800 px-3 py-2 text-sm font-medium text-white">
+                    File Conversion
+                  </button>
+                  <button className="flex-1 bg-primary rounded-md px-3 py-2 text-sm font-medium text-white">
+                    AI Models
+                  </button>
+                  <button className="flex-1 rounded-md px-3 py-2 text-sm font-medium text-zinc-400">
+                    Cloud Storage
+                  </button>
+                </div>
+              </div>
+
+              {isApiKeysLoading ? (
+                <div className="text-center py-6">Loading API keys...</div>
+              ) : (
+                <div className="space-y-8">
+                  {/* OpenAI Key */}
+                  <div className="border border-zinc-800 rounded-lg p-6 bg-zinc-950">
+                    <div className="flex items-start justify-between mb-2">
+                      <div>
+                        <h3 className="text-primary font-medium text-lg">OpenAI</h3>
+                        <p className="text-sm text-zinc-400 mt-1">
+                          Required for advanced AI features like content generation and document analysis.
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="inline-flex items-center px-2 py-1 rounded-full bg-green-500/10 text-green-500 text-xs font-medium">
+                          <span className="inline-block w-2 h-2 rounded-full bg-green-500 mr-1.5"></span>
+                          <span>Active</span>
+                        </div>
+                        <div className="flex items-center">
+                          <span className="mr-2 text-sm text-zinc-400">Enabled</span>
+                          <Switch 
+                            checked={true}
+                            className="data-[state=checked]:bg-primary"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div className="relative w-full mt-4">
+                      <div className="p-3 bg-zinc-900 rounded-md border border-zinc-800 text-zinc-400 font-mono text-sm">
+                        sk-proj••••••••••••••••••••••••••••••••••••••••••••••••••••••••
+                      </div>
+                      <Button
+                        className="absolute right-2 top-1/2 transform -translate-y-1/2 h-8 w-8 rounded-full p-0"
+                        variant="ghost"
+                        size="icon"
+                        title="Show/Hide Key"
+                      >
+                        <Eye className="h-4 w-4 text-zinc-400" />
+                      </Button>
+                    </div>
+                    
+                    <div className="flex gap-2 mt-4">
+                      <Button 
+                        variant="outline"
+                        className="text-sm bg-zinc-900 hover:bg-zinc-800 border-zinc-800"
+                      >
+                        Test Connection
+                      </Button>
+                      
+                      <Button
+                        variant="outline"
+                        className="text-sm bg-primary text-white border-none hover:bg-primary/90"
+                      >
+                        <RefreshCw className="h-4 w-4 mr-2" />
+                        Regenerate
+                      </Button>
+                      
+                      <Button
+                        variant="outline"
+                        className="text-sm bg-zinc-900 hover:bg-zinc-800 border-zinc-800 ml-auto"
+                      >
+                        <ExternalLink className="h-4 w-4 mr-2" />
+                        Manage API Key
+                      </Button>
+                    </div>
+                  </div>
+                  
+                  {/* Claude 3.5 Sonnet - Empty State */}
+                  <div className="border border-zinc-800 rounded-lg p-6 bg-zinc-950">
+                    <div className="flex items-start justify-between mb-2">
+                      <div>
+                        <h3 className="text-indigo-400 font-medium text-lg">Claude 3.5 Sonnet</h3>
+                        <p className="text-sm text-zinc-400 mt-1">
+                          Use Anthropic's Claude 3.5 Sonnet for state-of-the-art AI capabilities and faster response times.
+                        </p>
+                      </div>
+                    </div>
+                    
+                    <div className="mt-4">
+                      <p className="text-sm text-zinc-400 mb-4">
+                        You haven't set up your Claude 3.5 Sonnet API key yet. Add your key to continue.
+                      </p>
+                      
+                      <div className="relative w-full">
+                        <Input 
+                          type="password" 
+                          placeholder="Enter your Claude 3.5 Sonnet API key" 
+                          className="bg-zinc-900 border-zinc-800 text-zinc-300"
+                        />
+                      </div>
+                      
+                      <Button
+                        className="mt-4 bg-indigo-600 hover:bg-indigo-700 text-white"
+                      >
+                        Save API Key
+                      </Button>
+                    </div>
+                  </div>
+                  
+                  {/* Llama 3 */}
+                  <div className="border border-zinc-800 rounded-lg p-6 bg-zinc-950">
+                    <div className="flex items-start justify-between mb-2">
+                      <div>
+                        <h3 className="text-blue-400 font-medium text-lg">Llama 3 70B</h3>
+                        <p className="text-sm text-zinc-400 mt-1">
+                          Use Meta's Llama 3 70B for advanced AI capabilities with state-of-the-art performance.
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="inline-flex items-center px-2 py-1 rounded-full bg-green-500/10 text-green-500 text-xs font-medium">
+                          <span className="inline-block w-2 h-2 rounded-full bg-green-500 mr-1.5"></span>
+                          <span>Active</span>
+                        </div>
+                        <div className="flex items-center">
+                          <span className="mr-2 text-sm text-zinc-400">Enabled</span>
+                          <Switch 
+                            checked={true}
+                            className="data-[state=checked]:bg-blue-500"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div className="relative w-full mt-4">
+                      <div className="p-3 bg-zinc-900 rounded-md border border-zinc-800 text-zinc-400 font-mono text-sm">
+                        LA-39b23••••••••••••••••••••••••••••••••••••••••••••••••••••••
+                      </div>
+                      <Button
+                        className="absolute right-2 top-1/2 transform -translate-y-1/2 h-8 w-8 rounded-full p-0"
+                        variant="ghost"
+                        size="icon"
+                        title="Show/Hide Key"
+                      >
+                        <Eye className="h-4 w-4 text-zinc-400" />
+                      </Button>
+                    </div>
+                    
+                    <div className="flex gap-2 mt-4">
+                      <Button 
+                        variant="outline"
+                        className="text-sm bg-zinc-900 hover:bg-zinc-800 border-zinc-800"
+                      >
+                        Test Connection
+                      </Button>
+                      
+                      <Button
+                        variant="outline"
+                        className="text-sm bg-blue-600 text-white border-none hover:bg-blue-700"
+                      >
+                        <RefreshCw className="h-4 w-4 mr-2" />
+                        Regenerate
+                      </Button>
+                      
+                      <Button
+                        variant="outline"
+                        className="text-sm bg-zinc-900 hover:bg-zinc-800 border-zinc-800 ml-auto"
+                      >
+                        <ExternalLink className="h-4 w-4 mr-2" />
+                        Manage API Key
+                      </Button>
+                    </div>
+                  </div>
+                  
+                  {/* Ollama - Empty State */}
+                  <div className="border border-zinc-800 rounded-lg p-6 bg-zinc-950">
+                    <div className="flex items-start justify-between mb-2">
+                      <div>
+                        <h3 className="text-pink-400 font-medium text-lg">Ollama</h3>
+                        <p className="text-sm text-zinc-400 mt-1">
+                          Use Ollama models for local AI processing with enhanced privacy.
+                        </p>
+                      </div>
+                    </div>
+                    
+                    <div className="mt-4">
+                      <p className="text-sm text-zinc-400 mb-4">
+                        You haven't set up your Ollama API key yet. Add your key to continue.
+                      </p>
+                      
+                      <div className="relative w-full">
+                        <Input 
+                          type="password" 
+                          placeholder="Enter your Ollama API key" 
+                          className="bg-zinc-900 border-zinc-800 text-zinc-300"
+                        />
+                      </div>
+                      
+                      <Button
+                        className="mt-4 bg-pink-600 hover:bg-pink-700 text-white"
+                      >
+                        Save API Key
+                      </Button>
+                    </div>
+                  </div>
+                  
+                  {/* Inflection - Empty State */}
+                  <div className="border border-zinc-800 rounded-lg p-6 bg-zinc-950">
+                    <div className="flex items-start justify-between mb-2">
+                      <div>
+                        <h3 className="text-orange-400 font-medium text-lg">Inflection Inflection-2</h3>
+                        <p className="text-sm text-zinc-400 mt-1">
+                          Use Inflection's powerful AI models for enhanced natural language understanding and generation.
+                        </p>
+                      </div>
+                    </div>
+                    
+                    <div className="mt-4">
+                      <p className="text-sm text-zinc-400 mb-4">
+                        You haven't set up your Inflection Inflection-2 API key yet. Add your key to continue.
+                      </p>
+                      
+                      <div className="relative w-full">
+                        <Input 
+                          type="password" 
+                          placeholder="Enter your Inflection Inflection-2 API key" 
+                          className="bg-zinc-900 border-zinc-800 text-zinc-300"
+                        />
+                      </div>
+                      
+                      <Button
+                        className="mt-4 bg-orange-600 hover:bg-orange-700 text-white"
+                      >
+                        Save API Key
+                      </Button>
+                    </div>
+                  </div>
+                  
+                  {/* Gemini - Empty State */}
+                  <div className="border border-zinc-800 rounded-lg p-6 bg-zinc-950">
+                    <div className="flex items-start justify-between mb-2">
+                      <div>
+                        <h3 className="text-emerald-400 font-medium text-lg">Gemini 1.5 Pro</h3>
+                        <p className="text-sm text-zinc-400 mt-1">
+                          Use Google's Gemini 1.5 Pro model for advanced multimodal capabilities.
+                        </p>
+                      </div>
+                    </div>
+                    
+                    <div className="mt-4">
+                      <p className="text-sm text-zinc-400 mb-4">
+                        You haven't set up your Gemini 1.5 Pro API key yet. Add your key to continue.
+                      </p>
+                      
+                      <div className="relative w-full">
+                        <Input 
+                          type="password" 
+                          placeholder="Enter your Gemini 1.5 Pro API key" 
+                          className="bg-zinc-900 border-zinc-800 text-zinc-300"
+                        />
+                      </div>
+                      
+                      <Button
+                        className="mt-4 bg-emerald-600 hover:bg-emerald-700 text-white"
+                      >
+                        Save API Key
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+        
+        {/* File History Tab */}
+        <TabsContent value="file-history">
+          <Card>
+            <CardHeader>
+              <CardTitle>File History</CardTitle>
+              <CardDescription>
+                Track your file renaming activities and patterns
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <FileHistorySection />
+            </CardContent>
+          </Card>
+        </TabsContent>
+        
+        {/* AI Features Tab */}
+        <TabsContent value="ai-features">
+          <Card>
+            <CardHeader>
+              <CardTitle>AI Features</CardTitle>
+              <CardDescription>
+                Configure AI-powered features for your document processing
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <AIFeaturesSection />
+            </CardContent>
+          </Card>
+        </TabsContent>
+        
+        {/* Agents Tab */}
+        <TabsContent value="agents">
+          <Card>
+            <CardHeader>
+              <CardTitle>AI Agents</CardTitle>
+              <CardDescription>
+                Manage your intelligent AI agents for automated file operations
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {/* Import and use the AgentManagement component here */}
+              <div className="mt-2">
+                <div className="py-4">
+                  <h3 className="text-lg font-semibold mb-2">AI Agents</h3>
+                  <p className="text-muted-foreground mb-4">
+                    Create and manage intelligent agents that can process your files automatically using AI
+                  </p>
+                  {/* Render the AgentManagement component */}
+                  <div className="mt-4">
+                    <div className="py-2">
+                      <AgentManagement />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+        
+        {/* Theme Tab */}
+        <TabsContent value="theme">
+          <ThemeSettings />
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
+}
+
+// File History Section Component
+function FileHistorySection() {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  
+  // Fetch file history data
+  const { data: fileHistory = [], isLoading: isHistoryLoading } = useQuery<FileHistoryItem[]>({
+    queryKey: ['/api/file-history'],
+    staleTime: 30000,
+  });
+  
+  // Delete file history entry mutation
+  const deleteHistoryMutation = useMutation({
+    mutationFn: async (id: number) => {
+      return await apiRequest({
+        url: `/api/file-history/${id}`,
+        method: "DELETE"
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/file-history'] });
+      toast({
+        title: "History entry deleted",
+        description: "The file history entry has been removed",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Deletion failed",
+        description: "Failed to delete history entry",
+        variant: "destructive",
+      });
+    },
+  });
+  
+  const handleDeleteHistoryEntry = (id: number) => {
+    deleteHistoryMutation.mutate(id);
+  };
+  
+  return (
+    <FileHistoryTable 
+      history={fileHistory}
+      onDelete={handleDeleteHistoryEntry}
+      isLoading={isHistoryLoading}
+    />
+  );
+}
+
+// AI Features Section Component
+function AIFeaturesSection() {
+  return (
+    <AIFeatureList />
+  );
+}

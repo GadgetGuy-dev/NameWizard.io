@@ -1,0 +1,573 @@
+# NameWizard Desktop - Replit Build Prompt
+
+## How to Start This Project in Replit
+
+1. Upload the NameWizard.version2.3.zip to GitHub using Manus
+2. In Replit, click "+ Create App"
+3. Click "Import from GitHub"
+4. Select the repository you just uploaded
+5. Once imported, paste this entire prompt into the chat
+
+---
+
+## Project Goal
+
+Convert NameWizard.io v2.3 (cloud application) into NameWizard Desktop v1.0 - a fully-featured Electron desktop application for Mac and Windows. Preserve ALL existing features, UI, and styling while adding desktop-specific enhancements for local API key management and offline capabilities.
+
+Source: NameWizard.io v2.3 (this codebase)
+Target: Electron desktop app with local storage
+Theme: Black background with orange accents (preserved exactly)
+Desktop Version: 1.0.0
+
+---
+
+## Technology Stack
+
+- Framework: Electron 28+ with electron-builder
+- Frontend: React 18 + TypeScript + Vite (already in this repo)
+- UI: shadcn/ui + Tailwind CSS + Radix UI (already in this repo)
+- Local Database: SQLite via better-sqlite3 + Drizzle ORM
+- Secure Storage: keytar (OS keychain for API keys)
+- Settings: electron-store (encrypted local config)
+- Auto-Updates: electron-updater
+
+Install these packages:
+- electron
+- electron-builder
+- electron-updater
+- keytar
+- electron-store
+- better-sqlite3
+- concurrently
+
+---
+
+## Project Structure to Create
+
+Add an electron/ folder to the existing project:
+
+electron/
+├── main.ts                 # Electron main process
+├── preload.ts              # Secure IPC bridge
+├── services/
+│   ├── database.ts         # SQLite operations
+│   ├── keychain.ts         # Secure API key storage (keytar)
+│   ├── fileSystem.ts       # Local file operations
+│   ├── folderWatcher.ts    # Magic Folders fs.watch
+│   ├── aiProviders.ts      # AI API calls (OpenAI, Anthropic, etc.)
+│   ├── ocrService.ts       # OCR processing
+│   └── jobQueue.ts         # Background job processing
+├── ipc/
+│   ├── handlers.ts         # IPC message handlers
+│   └── channels.ts         # IPC channel definitions
+└── tray.ts                 # System tray integration
+
+Keep existing folders:
+- client/src/ (React frontend - already exists)
+- shared/ (shared types - already exists)
+
+Remove/replace:
+- server/ folder (replace with electron/ services)
+- PostgreSQL references (replace with SQLite)
+
+---
+
+## Complete Feature List to Preserve
+
+### 1. File Processing & Renaming
+- Drag-and-drop file upload zone with visual feedback
+- Multi-file batch selection and processing
+- AI-powered name suggestion generation
+- Side-by-side before/after preview
+- One-click rename with undo capability
+- File hash caching for duplicate detection
+- Support for all common file types
+
+### 2. AI Provider Integration
+Preserve all providers with their configurations:
+
+| Provider | Models | Capabilities |
+|----------|--------|--------------|
+| OpenAI | GPT-4o, GPT-4 Turbo, GPT-3.5 Turbo | Text, Vision, Audio |
+| Anthropic | Claude 3.5 Sonnet | Text, Vision |
+| Google | Gemini 1.5 Pro | Text, Vision |
+| Mistral | Mistral Large, Medium, Small | Text |
+| Perplexity | Sonar models | Text |
+| Ollama | Local models | Text (offline) |
+
+Features to preserve:
+- Provider enable/disable toggles
+- Per-plan priority configuration (primary/secondary/tertiary)
+- Automatic failover routing
+- Connection testing
+- Rate limit tracking
+- API metrics and latency monitoring
+
+### 3. OCR Integration
+- OpenAI Vision API for image analysis
+- Google Cloud Vision (optional)
+- Tesseract.js for offline OCR
+- PDF text extraction
+- Supports: PNG, JPG, JPEG, GIF, WebP, TIFF, PDF
+
+### 4. Naming Templates System
+Preserve all 6 system templates:
+1. Research - Academic: {Author}_{Year}_{Title}_{Type}
+2. Financial - Business: {Date}_{Vendor}_{Amount}_{Category}
+3. Design - Creative: {Project}_{Asset}_{Version}_{Size}
+4. Medical - Healthcare: {PatientID}_{Date}_{Procedure}_{Provider}
+5. Agile - Development: {Sprint}_{Ticket}_{Feature}_{Status}
+6. General - Universal: {Date}_{Description}_{Type}
+
+Template features:
+- Custom template creation with pattern builder
+- Variable insertion: {date}, {type}, {content}, {counter}, {ext}
+- Live preview with sample files
+- Template categories and filtering
+- Import/export templates as JSON
+
+### 5. Abbreviations Dictionary
+Preserve all 61 standard abbreviations across categories:
+- Document types: doc, img, pdf, xls, ppt, etc.
+- Time periods: Q1-Q4, YTD, MTD, WTD, etc.
+- Versions: v1, draft, final, rev, approved, etc.
+- Status: pending, active, archived, cancelled, etc.
+
+Features:
+- Custom abbreviation creation
+- Category management
+- Search and filter
+- Import/export
+
+### 6. Magic Folders
+DESKTOP ENHANCEMENT: Convert from cloud simulation to real filesystem watchers
+
+- Add watched folders via native folder picker
+- Real-time file monitoring using Node.js fs.watch
+- Per-folder configuration:
+  - Naming template assignment
+  - Include patterns (e.g., *.pdf, *.jpg)
+  - Exclude patterns (e.g., *.tmp, ~*)
+  - Process subdirectories toggle
+- Background processing with system notifications
+- Activity log with timestamps
+- Pause/resume watching
+- Folder status indicators
+
+### 7. Job Queue & Batch Processing
+- Local SQLite-based job queue
+- Priority levels: High, Normal, Low
+- Job states: Pending, Processing, Completed, Failed
+- Per-job controls: Pause, Resume, Cancel, Retry
+- Progress tracking with percentage and ETA
+- Error handling with detailed messages
+- Automatic retry with exponential backoff
+- Comprehensive job history
+
+### 8. Custom Instructions
+Preserve all customization options:
+- Naming style: Professional, Creative, Descriptive, Minimal
+- Separator: Hyphen (-), Underscore (_), Space, CamelCase, Period (.)
+- Date format: YYYY-MM-DD, MM-DD-YYYY, DD-MM-YYYY, YYYYMMDD
+- Maximum filename length (20-255 characters)
+- Custom prompt additions for AI
+- Preserve original extension toggle
+
+### 9. Settings Page
+Preserve all sections from cloud version:
+- General settings
+- Appearance (dark theme with black/orange)
+- File handling preferences
+- Default AI provider selection
+- System information display (version, uptime, response time)
+
+---
+
+## Desktop-Only Enhancements (NEW FEATURES)
+
+### Enhanced API Key Management Page (/settings/api-keys)
+
+Create a completely new, enhanced API key management interface:
+
+Layout:
+- Provider cards grid (OpenAI, Anthropic, Google, Mistral, Perplexity, Ollama)
+- Each card shows: Provider logo, status indicator (Active/Not Set), Configure button
+- Usage Analytics section with charts showing API calls over time
+- Feature Assignments section: dropdowns to assign which provider handles which task
+
+Provider Configuration Modal:
+- API key input with show/hide toggle
+- Test Connection button with real API validation
+- Usage statistics (requests today, this month, total)
+- Cost tracking (estimated spend based on usage)
+- Model selection checkboxes
+- Save/Cancel buttons
+
+Features:
+- Secure storage in OS keychain (never in files)
+- Real API connection testing with response validation
+- Per-provider usage tracking and cost estimation
+- Per-feature key assignment (use different providers for different tasks)
+- Import/export encrypted key backups
+- Key rotation reminders
+- Rate limit warnings
+
+### Offline Mode
+- Visual online/offline indicator in header
+- Queue jobs when offline for later processing
+- Automatic sync when connection restored
+- Use local Ollama models when available
+- "Local Only" mode toggle (never connect to internet)
+- Offline job count badge
+
+### System Tray Integration
+- Minimize to tray instead of closing
+- Tray icon with processing status indicator
+- Right-click context menu:
+  - Open NameWizard
+  - Quick process: Clipboard image
+  - Recent files (last 5)
+  - Pause all processing
+  - Resume processing
+  - Separator
+  - Preferences...
+  - Check for Updates
+  - Separator
+  - Quit NameWizard
+
+### Native Dialogs & Features
+- Native file open dialog (single/multiple)
+- Native folder picker for Magic Folders
+- Native save dialog for exports
+- Drag files from Finder/Explorer directly into app
+- Drop files onto dock icon (Mac) / taskbar icon (Windows) to process
+- System notifications for:
+  - Job completed
+  - Magic Folder activity
+  - Errors requiring attention
+  - Update available
+
+### Keyboard Shortcuts
+| Shortcut | Action |
+|----------|--------|
+| Cmd/Ctrl + O | Open file(s) |
+| Cmd/Ctrl + Shift + O | Open folder |
+| Cmd/Ctrl + R | Rename selected |
+| Cmd/Ctrl + Enter | Process all pending |
+| Cmd/Ctrl + Z | Undo last rename |
+| Cmd/Ctrl + Shift + Z | Redo |
+| Cmd/Ctrl + , | Open Settings |
+| Cmd/Ctrl + K | Quick search |
+| Cmd/Ctrl + Q | Quit |
+| Esc | Cancel current operation |
+
+### Auto-Update System
+- Check for updates on startup (configurable)
+- Manual check in Settings > About
+- Background download of updates
+- "Update Available" notification with release notes
+- One-click install and restart
+- Rollback capability if update fails
+
+---
+
+## Database Schema (SQLite)
+
+Replace PostgreSQL with SQLite. Create these tables:
+
+-- Application settings
+CREATE TABLE settings (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL,
+  updated_at INTEGER DEFAULT (unixepoch())
+);
+
+-- API key references (actual keys in OS keychain)
+CREATE TABLE api_keys (
+  id TEXT PRIMARY KEY,
+  provider TEXT NOT NULL,
+  keychain_service TEXT NOT NULL,
+  keychain_account TEXT NOT NULL,
+  nickname TEXT,
+  is_active INTEGER DEFAULT 1,
+  created_at INTEGER DEFAULT (unixepoch()),
+  last_used_at INTEGER,
+  last_tested_at INTEGER,
+  test_status TEXT DEFAULT 'untested'
+);
+
+-- Per-feature API key assignments
+CREATE TABLE feature_assignments (
+  feature TEXT PRIMARY KEY,
+  api_key_id TEXT REFERENCES api_keys(id),
+  provider TEXT,
+  model TEXT,
+  updated_at INTEGER DEFAULT (unixepoch())
+);
+
+-- API usage metrics
+CREATE TABLE api_metrics (
+  id TEXT PRIMARY KEY,
+  api_key_id TEXT REFERENCES api_keys(id),
+  provider TEXT NOT NULL,
+  model TEXT,
+  endpoint TEXT,
+  tokens_input INTEGER DEFAULT 0,
+  tokens_output INTEGER DEFAULT 0,
+  latency_ms INTEGER,
+  status TEXT,
+  error_message TEXT,
+  estimated_cost REAL,
+  created_at INTEGER DEFAULT (unixepoch())
+);
+
+-- Naming templates
+CREATE TABLE naming_templates (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  description TEXT,
+  pattern TEXT NOT NULL,
+  category TEXT,
+  variables TEXT,
+  is_system INTEGER DEFAULT 0,
+  is_active INTEGER DEFAULT 1,
+  created_at INTEGER DEFAULT (unixepoch()),
+  updated_at INTEGER DEFAULT (unixepoch())
+);
+
+-- Abbreviations dictionary
+CREATE TABLE abbreviations (
+  id TEXT PRIMARY KEY,
+  short_form TEXT NOT NULL UNIQUE,
+  long_form TEXT NOT NULL,
+  category TEXT,
+  is_system INTEGER DEFAULT 0,
+  created_at INTEGER DEFAULT (unixepoch())
+);
+
+-- Custom naming instructions
+CREATE TABLE custom_instructions (
+  id TEXT PRIMARY KEY DEFAULT 'default',
+  naming_style TEXT DEFAULT 'professional',
+  separator TEXT DEFAULT 'hyphen',
+  date_format TEXT DEFAULT 'YYYY-MM-DD',
+  max_length INTEGER DEFAULT 100,
+  preserve_extension INTEGER DEFAULT 1,
+  custom_prompt TEXT,
+  updated_at INTEGER DEFAULT (unixepoch())
+);
+
+-- Magic Folders configuration
+CREATE TABLE magic_folders (
+  id TEXT PRIMARY KEY,
+  path TEXT NOT NULL UNIQUE,
+  name TEXT,
+  template_id TEXT REFERENCES naming_templates(id),
+  is_active INTEGER DEFAULT 1,
+  include_patterns TEXT,
+  exclude_patterns TEXT,
+  process_subdirs INTEGER DEFAULT 0,
+  created_at INTEGER DEFAULT (unixepoch()),
+  last_processed_at INTEGER
+);
+
+-- Magic Folder activity log
+CREATE TABLE folder_activity (
+  id TEXT PRIMARY KEY,
+  folder_id TEXT REFERENCES magic_folders(id),
+  file_path TEXT NOT NULL,
+  event_type TEXT,
+  original_name TEXT,
+  new_name TEXT,
+  error_message TEXT,
+  created_at INTEGER DEFAULT (unixepoch())
+);
+
+-- Job queue
+CREATE TABLE job_queue (
+  id TEXT PRIMARY KEY,
+  file_path TEXT NOT NULL,
+  original_name TEXT NOT NULL,
+  file_size INTEGER,
+  file_type TEXT,
+  status TEXT DEFAULT 'pending',
+  priority TEXT DEFAULT 'normal',
+  template_id TEXT REFERENCES naming_templates(id),
+  suggested_names TEXT,
+  selected_name TEXT,
+  error_message TEXT,
+  retry_count INTEGER DEFAULT 0,
+  max_retries INTEGER DEFAULT 3,
+  created_at INTEGER DEFAULT (unixepoch()),
+  started_at INTEGER,
+  completed_at INTEGER
+);
+
+-- File rename history (for undo)
+CREATE TABLE file_history (
+  id TEXT PRIMARY KEY,
+  original_path TEXT NOT NULL,
+  original_name TEXT NOT NULL,
+  new_path TEXT NOT NULL,
+  new_name TEXT NOT NULL,
+  file_size INTEGER,
+  template_id TEXT,
+  ai_provider TEXT,
+  ai_model TEXT,
+  processing_time_ms INTEGER,
+  is_reverted INTEGER DEFAULT 0,
+  reverted_at INTEGER,
+  created_at INTEGER DEFAULT (unixepoch())
+);
+
+-- File hash cache for duplicate detection
+CREATE TABLE file_hash_cache (
+  hash TEXT PRIMARY KEY,
+  file_path TEXT NOT NULL,
+  file_name TEXT NOT NULL,
+  file_size INTEGER NOT NULL,
+  created_at INTEGER DEFAULT (unixepoch())
+);
+
+-- Offline job queue (for sync when back online)
+CREATE TABLE offline_queue (
+  id TEXT PRIMARY KEY,
+  job_type TEXT NOT NULL,
+  payload TEXT NOT NULL,
+  created_at INTEGER DEFAULT (unixepoch()),
+  synced_at INTEGER
+);
+
+---
+
+## UI Styling (Preserve Exactly)
+
+All styling from cloud version must be preserved:
+
+Colors:
+- Background: bg-black, bg-zinc-900, bg-zinc-950
+- Cards: bg-zinc-900 border-zinc-800
+- Text primary: text-white, text-zinc-100
+- Text secondary: text-zinc-400, text-zinc-500
+- Accent: text-orange-400, text-orange-500, bg-orange-500
+- Borders: border-zinc-700, border-zinc-800
+- Hover states: hover:bg-zinc-800, hover:bg-orange-600
+
+Components:
+- All shadcn/ui components with dark theme
+- Radix UI primitives
+- Custom card designs from cloud
+- Badge variants (active, inactive, error states)
+- Progress bars with orange fill
+- Form inputs with zinc styling
+
+Animations:
+- Framer Motion transitions
+- Loading skeletons
+- Toast notifications
+- Confetti effects (for completions)
+
+---
+
+## Package.json Scripts to Add
+
+{
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "electron:dev": "concurrently \"vite\" \"wait-on http://localhost:5173 && electron .\"",
+    "electron:build": "vite build && electron-builder",
+    "electron:build:mac": "vite build && electron-builder --mac",
+    "electron:build:win": "vite build && electron-builder --win",
+    "db:push": "drizzle-kit push:sqlite",
+    "db:studio": "drizzle-kit studio"
+  }
+}
+
+---
+
+## electron-builder.yml to Create
+
+appId: io.namewizard.desktop
+productName: NameWizard
+copyright: Copyright 2024 NameWizard
+
+directories:
+  output: dist
+  buildResources: resources
+
+files:
+  - dist/**/*
+  - electron/**/*
+  - package.json
+
+mac:
+  category: public.app-category.productivity
+  target:
+    - dmg
+    - zip
+  icon: resources/icon.icns
+  hardenedRuntime: true
+  gatekeeperAssess: false
+
+win:
+  target:
+    - nsis
+    - portable
+  icon: resources/icon.ico
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+
+---
+
+## Security Requirements
+
+1. API Keys: Store exclusively in OS keychain via keytar - never in config files
+2. Database: Encrypt SQLite database at rest
+3. IPC: Use contextIsolation and explicit preload script
+4. Updates: Verify code signatures before installing
+5. No Telemetry: Zero data collection without explicit opt-in
+6. Local Processing: Files never leave user's computer
+
+---
+
+## Development Phases
+
+### Phase 1: Project Foundation
+- Set up Electron project structure in this repo
+- Configure Vite for Electron renderer
+- Set up SQLite database with Drizzle
+- Implement keychain integration (keytar)
+- Create IPC communication layer
+- Adapt existing React components for desktop
+
+### Phase 2: Core Features
+- Implement local file system access
+- Convert AI provider integrations to use local keys
+- Build local job queue with SQLite
+- Migrate naming templates to SQLite
+- Set up abbreviations system locally
+- Implement custom instructions
+
+### Phase 3: Desktop Enhancements
+- Build enhanced API key management UI
+- Implement real Magic Folders with fs.watch
+- Add system tray integration
+- Implement keyboard shortcuts
+- Build offline mode
+- Add native dialogs
+
+### Phase 4: Polish & Distribution
+- Implement auto-update system
+- Complete all settings pages
+- Cross-platform testing (Mac + Windows)
+- Code signing setup
+- Build installers
+
+---
+
+Begin by setting up the Electron structure, then systematically convert each component while maintaining the exact UI styling and adding desktop-specific functionality. The React components in client/src/ should be largely reusable - just update the API calls to use Electron IPC instead of HTTP requests.

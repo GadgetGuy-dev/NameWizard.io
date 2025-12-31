@@ -1,0 +1,311 @@
+# NW-Claude: NameWizard.io Complete Build Prompt
+
+Build NameWizard.io v2.3 - an AI-powered file renaming and organization web application.
+
+## Stack
+- Frontend: React 18, TypeScript, Vite, Tailwind CSS, shadcn/ui, Radix UI, TanStack Query, Wouter
+- Backend: Node.js, Express, TypeScript
+- Database: PostgreSQL with Drizzle ORM
+- Auth: Passport.js with sessions (connect-pg-simple)
+- Payments: Stripe subscriptions
+- AI: OpenAI, Anthropic Claude, Google Gemini, Mistral, Perplexity, Ollama
+
+## Theme
+Black background (#000, zinc-900, zinc-950) with orange accents (orange-400, orange-500, orange-600). Dark mode only.
+
+## User Roles
+- user: Standard user
+- admin: Can access admin dashboard
+- god_admin: Full system access (default: mrbrown188)
+
+## Subscription Plans (Stripe)
+| Plan | Price | Monthly Files | Features |
+|------|-------|---------------|----------|
+| Free | $0 | 10 | Basic AI, 1 provider |
+| Basic | $19/mo | 100 | All providers, templates |
+| Pro | $49/mo | 500 | Priority processing, OCR, Magic Folders |
+| Unlimited | $99/mo or $1188/yr | Unlimited | All features, API access |
+
+## Database Schema (PostgreSQL with Drizzle)
+
+### Enums
+```typescript
+userRoleEnum: ["user", "admin", "god_admin"]
+planTypeEnum: ["free", "credits_low", "credits_high", "unlimited"]
+apiKeyStatusEnum: ["active", "inactive", "problem"]
+llmTypeEnum: ["claude_3_5_sonnet", "gpt_4o", "gpt_4o_mini", "gpt_3_5_turbo", "gpt_4_turbo", "llama_3", "llama_3_70b", "llama_3_2_90b", "llava_1_6", "inflection_2_5", "gemini_1_5_pro", "ollama"]
+cloudProviderEnum: ["dropbox", "google_drive"]
+agentTypeEnum: ["file_organizer", "content_analyzer", "batch_processor", "file_sync", "intelligent_categorization", "performance_optimization", "file_annotation", "file_preview", "custom"]
+agentStatusEnum: ["idle", "running", "completed", "failed"]
+aiFeatureStatusEnum: ["active", "inactive", "problem"]
+providerTypeEnum: ["ai", "cloud", "ocr"]
+providerStatusEnum: ["active", "inactive", "problem", "testing"]
+priorityTypeEnum: ["primary", "secondary", "tertiary", "optional"]
+alertSeverityEnum: ["critical", "warning", "info"]
+alertStatusEnum: ["active", "acknowledged", "resolved"]
+namingTemplateCategoryEnum: ["research", "financial", "design", "medical", "agile", "general", "custom"]
+jobStatusEnum: ["pending", "processing", "completed", "failed", "cancelled"]
+```
+
+### Core Tables
+```typescript
+users: { id, username, email, password, fullName, role, planType, stripeCustomerId, stripeSubscriptionId, subscriptionStatus, createdAt, updatedAt }
+apiKeys: { id, userId, llmType, name, key, status, lastUsed, createdAt, updatedAt }
+cloudConnections: { id, userId, provider, accessToken, refreshToken, expiresAt, createdAt, updatedAt }
+folders: { id, userId, name, path, parentId, description, color, icon, isAutomated, autoRules, createdAt, updatedAt }
+files: { id, userId, folderId, originalName, newName, size, type, path, cloudProvider, cloudFileId, metadata, createdAt, updatedAt }
+presets: { id, userId, name, pattern, isCustom, createdAt, updatedAt }
+fileHistory: { id, userId, originalName, newName, fileType, fileSize, renamePattern, usedAI, aiModel, details, renamedAt }
+agents: { id, userId, name, type, description, status, config, lastRun, createdAt, updatedAt }
+aiFeatures: { id, userId, featureId, name, description, status, requiredLlmType, createdAt, updatedAt }
+```
+
+### Admin Tables
+```typescript
+providerConfigs: { id, name, type, category, apiKey, status, isEnabled, isPrimary, isBackup, backupPriority, latency, lastTested, usageCurrent, usageLimit, usageCost, costRate, models, planConfigs, supportAgentEnabled, createdAt, updatedAt }
+healthSnapshots: { id, serviceName, serviceType, status, latency, errorMessage, details, checkedAt }
+keyBackups: { id, name, description, backupData, providerCount, size, createdBy, createdAt }
+testRuns: { id, testName, testType, status, duration, results, errorMessage, scheduledAt, startedAt, completedAt, createdAt }
+systemSettings: { id, key, value, updatedAt }
+systemAlerts: { id, serviceName, severity, status, title, message, reason, fixAction, fixLink, autoFixAvailable, detectedBy, resolvedAt, createdAt, updatedAt }
+```
+
+### Feature Tables
+```typescript
+namingTemplates: { id, name, category, pattern, dateFormat, separator, fields, examples, tips, isSystem, userId, createdAt, updatedAt }
+abbreviations: { id, fullText, abbreviation, category, isSystem, userId, createdAt }
+jobQueue: { id, userId, jobType, status, priority, progress, totalItems, completedItems, inputData, outputData, errorMessage, providerUsed, processingTimeMs, startedAt, completedAt, createdAt, updatedAt }
+customInstructions: { id, userId (unique), namingStyle, separator, dateFormat, datePosition, customPrefix, customSuffix, maxLength, outputLanguage, customPrompt, preserveExtension, createdAt, updatedAt }
+passwordResetTokens: { id, userId, token (unique), expiresAt, usedAt, createdAt }
+apiMetrics: { id, userId, providerName, modelName, endpoint, tokensIn, tokensOut, latencyMs, status, errorMessage, createdAt }
+fileHashCache: { id, userId, fileHash, originalName, suggestedNames, providerUsed, createdAt }
+magicFolders: { id, userId, name, path, templateId, rules, isActive, lastProcessed, createdAt, updatedAt }
+```
+
+## Pages to Build
+
+### Public
+- `/` - Landing page with hero, features, pricing preview
+- `/auth` - Login/Register tabs
+- `/pricing` - Plan comparison with Stripe checkout
+
+### User (Protected)
+- `/dashboard` - Main file upload/rename interface with drag-drop zone
+- `/files` - File manager with folder tree
+- `/history` - Rename history with undo
+- `/templates` - Naming templates (6 system + custom)
+- `/magic-folders` - Automated folder watching
+- `/agents` - AI agent configurations
+- `/api-keys` - User's API key management
+- `/settings` - User preferences, custom instructions
+- `/profile` - Account info, subscription status
+- `/subscription` - Plan management, upgrade/downgrade
+
+### Admin (admin/god_admin only)
+- `/admin` - Dashboard overview
+- `/admin/api-management` - 4 tabs: AI Providers, Cloud Storage, OCR Providers, Stripe
+- `/admin/users` - User management
+- `/admin/system-status` - Health monitoring
+- `/admin/metrics` - API usage analytics
+- `/admin/key-backups` - Backup management
+- `/admin/auto-testing` - Provider testing
+- `/admin/db-management` - Database operations
+
+## Core Features
+
+### 1. File Upload & Renaming
+- Drag-drop zone accepts multiple files (10MB limit via Multer)
+- AI analyzes file content/name and suggests 3-5 new names
+- Preview before/after with one-click apply
+- Batch processing with progress bar
+- Undo last rename
+
+### 2. AI Provider System
+Each provider configured with: apiKey, models[], priority (primary/secondary/tertiary), planConfigs (which plans can use it)
+
+Providers:
+- OpenAI: GPT-4o, GPT-4 Turbo, GPT-3.5 Turbo (vision capable)
+- Anthropic: Claude 3.5 Sonnet (vision capable)
+- Google: Gemini 1.5 Pro
+- Mistral: Large, Medium, Small
+- Perplexity: Sonar models
+- Ollama: Local models (offline)
+
+Fallback routing: If primary fails, try secondary, then tertiary
+
+### 3. Naming Templates
+6 System templates seeded on startup:
+1. Research: {Author}_{Year}_{Title}_{Type} (YYYY-MM-DD, underscore)
+2. Financial: {Date}_{Vendor}_{Amount}_{Category} (YYYY-MM-DD, underscore)
+3. Design: {Project}_{Asset}_{Version}_{Size} (YYYYMMDD, hyphen)
+4. Medical: {PatientID}_{Date}_{Procedure}_{Provider} (YYYY-MM-DD, underscore)
+5. Agile: {Sprint}_{Ticket}_{Feature}_{Status} (YYYY-MM-DD, hyphen)
+6. General: {Date}_{Description}_{Type} (YYYY-MM-DD, underscore)
+
+### 4. Abbreviations Dictionary
+61 system abbreviations across categories:
+- Document: doc, img, pdf, xls, ppt, txt, csv, json, xml, html
+- Time: Q1, Q2, Q3, Q4, YTD, MTD, WTD, EOD, EOW, EOM, EOY
+- Version: v1, v2, draft, final, rev, approved, pending, archived
+- Status: active, inactive, complete, pending, cancelled, approved
+
+### 5. Magic Folders
+- User adds folder paths to watch
+- Each folder assigned a naming template
+- Include/exclude patterns (*.pdf, *.jpg, ~*)
+- Process subdirectories toggle
+- Real-time or scheduled processing
+
+### 6. Job Queue
+Background processing with:
+- Priority levels (0=low, 1=normal, 2=high)
+- Progress tracking (0-100%)
+- Status: pending → processing → completed/failed
+- Error handling with retry
+- Processing time metrics
+
+### 7. Custom Instructions
+Per-user naming preferences:
+- Style: auto, professional, creative, technical, minimal
+- Separator: underscore, hyphen, space, camelCase, period
+- Date format: YYYY-MM-DD, MM-DD-YYYY, DD-MM-YYYY, YYYYMMDD
+- Date position: prefix, suffix, none
+- Custom prefix/suffix
+- Max length (20-255)
+- Output language
+- Custom AI prompt additions
+- Preserve extension toggle
+
+### 8. OCR Integration
+- OpenAI Vision API (primary)
+- Google Cloud Vision (optional)
+- Tesseract.js (offline fallback)
+- Supports: PNG, JPG, JPEG, GIF, WebP, TIFF, PDF
+
+### 9. Cloud Storage
+- Dropbox: OAuth2 flow, file sync
+- Google Drive: OAuth2 flow, file access
+
+## API Routes
+
+### Auth
+```
+POST /api/auth/register { username, email, password }
+POST /api/auth/login { email, password }
+POST /api/auth/logout
+GET /api/auth/user
+POST /api/auth/forgot-password { email }
+POST /api/auth/reset-password { token, password }
+```
+
+### Files
+```
+POST /api/files/upload (multipart)
+POST /api/files/analyze { fileId, templateId? }
+POST /api/files/rename { fileId, newName }
+POST /api/files/batch-rename { files: [{id, newName}] }
+GET /api/files
+GET /api/files/:id
+DELETE /api/files/:id
+```
+
+### Templates
+```
+GET /api/templates
+GET /api/templates/:id
+POST /api/templates { name, category, pattern, ... }
+PUT /api/templates/:id
+DELETE /api/templates/:id
+```
+
+### Jobs
+```
+GET /api/jobs
+GET /api/jobs/:id
+POST /api/jobs { jobType, inputData }
+DELETE /api/jobs/:id
+POST /api/jobs/:id/retry
+```
+
+### User Settings
+```
+GET /api/settings/custom-instructions
+PUT /api/settings/custom-instructions
+GET /api/settings/api-keys
+POST /api/settings/api-keys
+DELETE /api/settings/api-keys/:id
+```
+
+### Admin
+```
+GET /api/admin/providers
+PUT /api/admin/providers/:id
+POST /api/admin/providers/:id/test
+GET /api/admin/users
+PUT /api/admin/users/:id
+DELETE /api/admin/users/:id
+GET /api/admin/metrics
+GET /api/admin/health
+POST /api/admin/backup
+GET /api/admin/backups
+```
+
+### Stripe
+```
+POST /api/stripe/create-checkout-session { planType }
+POST /api/stripe/create-portal-session
+POST /api/stripe/webhook (Stripe events)
+GET /api/stripe/subscription
+```
+
+## Component Structure
+
+```
+client/src/
+├── components/
+│   ├── ui/              # shadcn components
+│   ├── layout/          # Navbar, Sidebar, Footer
+│   ├── FileUploader.tsx # Drag-drop zone
+│   ├── FilePreview.tsx  # Before/after preview
+│   ├── TemplateCard.tsx # Template display
+│   ├── JobProgress.tsx  # Progress bar
+│   └── ProviderCard.tsx # AI provider config
+├── pages/               # Route components
+├── hooks/               # useToast, useAuth, useBatchProcessing
+├── contexts/            # BatchProcessingContext, ThemeContext, OnboardingContext
+└── lib/                 # queryClient, api helpers
+```
+
+## Key Implementation Notes
+
+1. **Session Auth**: Use express-session with connect-pg-simple, NOT JWT
+2. **File Upload**: Multer with 10MB limit, temp storage
+3. **AI Calls**: Server-side only, never expose API keys to client
+4. **Stripe Webhook**: Verify signature, update user planType on subscription events
+5. **Password Hashing**: scrypt with random salt (see server/auth.ts)
+6. **Role Checks**: Middleware for admin routes, client-side route guards
+7. **Real Data Only**: No mock data, all features use PostgreSQL
+
+## Environment Variables
+```
+DATABASE_URL
+OPENAI_API_KEY (optional)
+ANTHROPIC_API_KEY (optional)
+STRIPE_SECRET_KEY
+STRIPE_WEBHOOK_SECRET
+VITE_STRIPE_PUBLIC_KEY
+```
+
+## Seed Data
+On first run, seed:
+1. god_admin user (username: mrbrown188)
+2. 6 system naming templates
+3. 61 system abbreviations
+4. Default provider configurations
+
+## Build Commands
+```
+npm run dev          # Start dev server
+npm run db:push      # Push schema to database
+npm run build        # Production build
+```

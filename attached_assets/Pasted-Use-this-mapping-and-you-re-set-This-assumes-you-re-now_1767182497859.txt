@@ -1,0 +1,91 @@
+Use this mapping and you’re set. This assumes you’re now on the newer GPT‑5 stack, with Claude removed and **Mistral/Llama** as cheaper fallbacks.
+
+## 1. Exact GPT model assignments
+
+Interpret these as logical slots your orchestrator already knows about:
+
+- **primary_gpt**  
+  - Free: `gpt-5-nano` (OpenAI)  
+  - Basic ($19): `gpt-5-nano` for simple jobs, `gpt-5.2` for folder planning  
+  - Pro ($49): `gpt-5.2`  
+  - Unlimited ($99): `gpt-5.2`  
+
+- **secondary_gpt** (multimodal/backup)  
+  - All paid tiers: `gemini-2.5-flash` (Google)  
+  - Free: also `gemini-2.5-flash`, but used sparingly (your backend controls usage caps)
+
+- **tertiary_gpt** (cheap structured reasoning / validation)  
+  - All tiers: `mistral-small-2025` (Mistral)  
+
+- **quaternary_gpt** (extra fallback / router)  
+  - All tiers: `llama-3.1-small` (Llama / Meta, via your provider of choice)
+
+You can phrase this in your config as:
+
+- Free  
+  - primary_gpt: `gpt-5-nano`  
+  - secondary_gpt: `gemini-2.5-flash`  
+  - tertiary_gpt: `mistral-small-2025`  
+  - quaternary_gpt: `llama-3.1-small`  
+
+- Basic ($19)  
+  - primary_gpt: `gpt-5-nano` (Stage B + simple) and `gpt-5.2` for Stage A  
+  - secondary_gpt: `gemini-2.5-flash`  
+  - tertiary_gpt: `mistral-small-2025`  
+  - quaternary_gpt: `llama-3.1-small`  
+
+- Pro ($49) and Unlimited ($99)  
+  - primary_gpt: `gpt-5.2`  
+  - secondary_gpt: `gemini-2.5-flash`  
+  - tertiary_gpt: `mistral-small-2025`  
+  - quaternary_gpt: `llama-3.1-small`  
+
+Your orchestrator prompt already understands “primary vs secondary”; your backend just routes Stage A to primary and Stage B to secondary per tier.
+
+## 2. OCR providers to keep and how to use them
+
+Given your list (TechVision, Google Cloud Vision, AWS Textract, Azure Computer Vision), plus a Tesseract‑style budget option, use:
+
+- **TechVision** → treat as your **Tesseract / house OCR**: cheap, decent for clean text.  
+- **Google Cloud Vision / Document AI** → best all‑around OCR.  
+- **Azure Computer Vision / Read** → strong general OCR + handwriting.  
+- **AWS Textract** → keep mainly for forms/tables or AWS‑centric users.
+
+### OCR hierarchy per tier
+
+Use the `primary_ocr / secondary_ocr / tertiary_ocr` fields like this:
+
+- **Free**  
+  - primary_ocr: `TechVision` (or `tesseract-like`)  
+  - secondary_ocr: `GoogleVision-lite` (rate‑limited)  
+  - tertiary_ocr: `AzureVision-lite`  
+
+- **Basic ($19)**  
+  - primary_ocr: `GoogleVision-standard`  
+  - secondary_ocr: `AzureVision-standard`  
+  - tertiary_ocr: `TechVision`  
+
+- **Pro ($49)**  
+  - primary_ocr: `GoogleVision-advanced`  
+  - secondary_ocr: `AzureVision-advanced`  
+  - tertiary_ocr: `AWS-Textract` (for forms/receipts heavy users)  
+
+- **Unlimited ($99)**  
+  - primary_ocr: `GoogleVision-advanced`  
+  - secondary_ocr: `AzureVision-advanced`  
+  - tertiary_ocr: `AWS-Textract`  
+
+If you have to drop something to simplify: keep **TechVision + Google + Azure** as the core three, with Textract only in Pro/Unlimited or even disabled initially.
+
+## 3. Mapping to your pricing tiers
+
+Map your **plan_tier** in the orchestrator spec to your public tiers:
+
+- `plan_tier: "free"` → Free  
+- `plan_tier: "medium"` → Basic $19 and Pro $49 (you can distinguish those by a second field like `plan_name`, but the orchestrator behavior can be the same “medium” level)  
+- `plan_tier: "premium"` → Unlimited $99  
+
+If you want more nuance, add a `plan_name` field (e.g., `"basic" | "pro" | "unlimited"`) and let the backend choose slightly different limits per name, but keep the orchestrator’s logic the same for `"medium"` vs `"premium"` as defined in the system prompt.
+
+Sources
+[1] 2025-12-31_03-55-16.jpeg https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/images/17131034/1f87e51b-d0d1-43dc-817e-669d2c6900d2/2025-12-31_03-55-16.jpeg

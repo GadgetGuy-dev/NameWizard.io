@@ -1,0 +1,45 @@
+Comprehensive QA Prompt: Settings, Profile, Features, Workflow, and API Key Validation
+Objective:
+Thoroughly test and confirm that all settings, profile options, pages, and features are fully operational, correctly displayed, and integrated into the appropriate workflows. Additionally, verify that API key management (addition, validation, usage, and security) is implemented and functioning as intended.
+1. Settings and Profile Options
+	•	Review every user-accessible setting and profile option.
+	•	Confirm each setting can be toggled/modified, saved, and persists after logout/login or page refresh.
+	•	Check default values for new users and that changes are reflected immediately in the UI/UX.
+	•	Test edge cases (e.g., invalid input, empty fields, max/min values).
+	•	Ensure tooltips, descriptions, and help texts are accurate and visible.
+2. Pages and Navigation
+	•	Navigate through all pages (Dashboard, Settings, Profile, API Keys, etc.).
+	•	Confirm each page loads correctly and displays all intended components.
+	•	Check navigation links, breadcrumbs, and back/forward browser functionality.
+	•	Validate responsive design and accessibility (screen readers, keyboard navigation, etc.).
+3. Features and Functional Workflows
+	•	List all key features (e.g., file renaming, batch processing, AI suggestions, template management).
+	•	For each feature:
+	•	Execute the complete workflow as an end user.
+	•	Confirm that all UI elements, buttons, and actions perform as expected.
+	•	Validate error handling and user feedback for invalid actions.
+	•	Test integration points—ensure features trigger appropriate backend processes and updates.
+4. API Key Management
+	•	Test the entire API key workflow:
+	•	Generate a new API key.
+	•	Display/hide the key securely (masking, copy-to-clipboard, etc.).
+	•	Validate the key (correct/incorrect key usage).
+	•	Revoke/delete keys and confirm they are invalidated immediately.
+	•	Ensure API keys are stored securely and never exposed in logs or client-side code.
+	•	Confirm API key permissions/roles (if applicable) are enforced throughout the app.
+5. Workflow Integration
+	•	Map each feature and setting to its respective workflow.
+	•	Confirm new and existing features are correctly placed within user journeys (e.g., onboarding, daily use, admin tasks).
+	•	Test cross-feature dependencies (e.g., settings impacting feature behavior).
+	•	Ensure that changes in one area (e.g., profile update) are reflected in all relevant workflows and pages.
+6. General QA & Regression
+	•	Perform regression testing to ensure recent changes haven’t broken existing functionality.
+	•	Check for any orphaned or legacy options/pages that should be removed or updated.
+	•	Validate that all user-facing text is clear, accurate, and free of typos.
+7. Reporting
+	•	Document any issues found with screenshots, steps to reproduce, and expected vs. actual behavior.
+	•	Provide a checklist of all items tested and their pass/fail status.
+Deliverable:
+A complete QA report confirming all settings, profile options, pages, features, workflows, and API key functionalities are working as intended, or a detailed list of issues found for remediation.
+Tip:
+If using an AI agent or automated testing, ensure the script covers each bullet point above and generates actionable output for the development team.

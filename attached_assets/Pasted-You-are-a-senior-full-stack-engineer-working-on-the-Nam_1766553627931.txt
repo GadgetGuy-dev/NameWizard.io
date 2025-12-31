@@ -1,0 +1,125 @@
+You are a senior full-stack engineer working on the NameWizard.io app hosted on Replit.
+
+GOAL (HIGH LEVEL)
+Implement a clean, minimal configuration layer for AI and OCR providers in the **in-app API Key Management UI** that:
+
+- Supports multiple model versions per provider (e.g., GPT-5.2, GPT-4o Mini, GPT-3.5 for OpenAI).
+- Allows enabling/disabling each model per pricing plan:
+  - free
+  - credits_low (small credit packs)
+  - credits_high (large credit packs)
+  - unlimited (Pro Unlimited)
+- Defines a clear failover order per plan and category:
+  - Primary → Secondary → Tertiary → Optional.
+- Keeps the existing UI controls and navigation intact.
+
+-------------------------
+1. LOCATION & SCOPE (LOCKED)
+-------------------------
+- This work is ONLY for the **in-app API Key Management UI**, opened from the **avatar dropdown menu**.
+- It already has three tabs:
+  1) AI Providers
+  2) Cloud Storage
+  3) OCR Providers
+
+You MUST:
+- NOT touch the landing page or main marketing site.
+- NOT change the tab structure, routes, or the avatar dropdown link that opens API Key Management.
+
+-------------------------
+2. WHAT MUST STAY AS-IS
+-------------------------
+For every provider card (e.g., OpenAI, Anthropic, Google, OCR vendors), keep these elements exactly as they are:
+
+- Provider name and icon
+- API key field
+- Usage/cost gauge and usage bar
+- Test button
+- Update button
+- Support button
+- Provider-level Enable/Disable toggle
+
+Do NOT:
+- Rename, remove, or move these elements.
+- Change their existing behavior, except to optionally hook them into the new config logic internally.
+
+-------------------------
+3. WHAT TO ADD / CHANGE – AI PROVIDERS TAB
+-------------------------
+Inside the **AI Providers** tab:
+
+A) Provider card stays, model list becomes configurable
+- Keep each provider card (OpenAI, Anthropic, Google, OpenRouter, etc.) as a single card.
+- Replace the simple "Available Models" chips with a **model configuration table/list INSIDE each provider card**.
+
+B) Model rows
+For each model the provider can use (examples for OpenAI):
+
+- GPT-5.2 Pro / Thinking (latest, top-tier)
+- GPT-4o Mini / GPT-4 Turbo (standard)
+- GPT-3.5 Turbo (legacy)
+
+Show a row with:
+- Model name/version (label)
+- Category tags: text / vision / audio (as appropriate)
+
+Per model, add controls for each plan:
+- Checkboxes:
+  - [ ] Enable for Free
+  - [ ] Enable for Credits – Low
+  - [ ] Enable for Credits – High
+  - [ ] Enable for Unlimited
+- For every plan where the model is enabled, show a Priority dropdown:
+  - Primary
+  - Secondary
+  - Tertiary
+  - Optional
+
+This must support configurations like:
+
+- GPT-5.2:
+  - Enabled for: Credits-High, Unlimited
+  - Credits-High: Primary text (and/or vision)
+  - Unlimited: Primary text/vision
+
+- GPT-4o:
+  - Enabled for: Free, Credits-Low
+  - Free: Primary text
+  - Credits-Low: Primary text
+
+- GPT-3.5:
+  - Enabled for: Free
+  - Free: Secondary or Tertiary text
+
+C) Optional plan filter bar
+- Inside each provider card, you may add a visual filter bar:
+  - [Free] [Credits – Low] [Credits – High] [Unlimited]
+- This is for focusing the UI only; it must NOT alter stored data by itself.
+
+D) Front-end constraints
+- Reuse the existing styles and layout.
+- DO NOT introduce new frameworks or redesign the whole page.
+- This is an extension of the existing cards, not a replacement.
+
+-------------------------
+4. WHAT TO ADD / CHANGE – OCR PROVIDERS TAB
+-------------------------
+Inside the **OCR Providers** tab:
+
+A) Keep existing OCR provider cards unchanged at the top level:
+- API key/project/region fields
+- Usage/cost gauge
+- Test / Update / Support
+- Provider-level Enable/Disable toggle
+
+B) Add per-plan controls at provider level
+- For each OCR provider (e.g., Google Document AI / Vision OCR, AWS Textract, Azure Document Intelligence):
+
+  Add controls:
+  - Plan enable checkboxes:
+    - [ ] Enable for Free
+    - [ ] Enable for Credits – Low
+    - [ ] Enable for Credits – High
+    - [ ] Enable for Unlimited
+  - For each plan where it is enabled, a Priority dropdown:
+    - Primary / Secondary / Tertiary / Optional
