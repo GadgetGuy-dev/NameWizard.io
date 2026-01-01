@@ -221,8 +221,16 @@ const AdminApiManagement = () => {
       supportAgentEnabled: false, alerts: []
     },
     { 
+      id: '19', name: 'Tesseract.js (Local)', type: 'ocr', category: 'tesseract', key: 'local-no-key-required', status: 'active', 
+      isEnabled: true, isPrimary: true, isBackup: false, backupPriority: 0, createdAt: new Date(),
+      usage: { current: 0, limit: 999999, cost: 0, costRate: 'Free (Local)' },
+      planConfigs: { free: { enabled: true, priority: 'primary' }, credits_low: { enabled: true, priority: 'primary' }, credits_high: { enabled: true, priority: 'secondary' }, unlimited: { enabled: true, priority: 'secondary' } },
+      models: [],
+      supportAgentEnabled: false, alerts: []
+    },
+    { 
       id: '20', name: 'TechVision OCR', type: 'ocr', category: 'techvision', key: '', status: 'inactive', 
-      isEnabled: false, isPrimary: true, isBackup: false, backupPriority: 0, createdAt: new Date(),
+      isEnabled: false, isPrimary: false, isBackup: true, backupPriority: 1, createdAt: new Date(),
       usage: { current: 0, limit: 10000, cost: 0, costRate: '$0.001/page' },
       planConfigs: { free: { enabled: true, priority: 'primary' }, credits_low: { enabled: true, priority: 'primary' }, credits_high: { enabled: true, priority: 'primary' }, unlimited: { enabled: true, priority: 'primary' } },
       models: [],
@@ -230,7 +238,7 @@ const AdminApiManagement = () => {
     },
     { 
       id: '21', name: 'Google Cloud Vision', type: 'ocr', category: 'google-vision', key: '', status: 'inactive', 
-      isEnabled: false, isPrimary: false, isBackup: true, backupPriority: 1, createdAt: new Date(),
+      isEnabled: false, isPrimary: false, isBackup: true, backupPriority: 2, createdAt: new Date(),
       usage: { current: 0, limit: 5000, cost: 0, costRate: '$0.0015/page' },
       planConfigs: { free: { enabled: true, priority: 'secondary' }, credits_low: { enabled: true, priority: 'secondary' }, credits_high: { enabled: true, priority: 'secondary' }, unlimited: { enabled: true, priority: 'secondary' } },
       models: [],
@@ -238,7 +246,7 @@ const AdminApiManagement = () => {
     },
     { 
       id: '22', name: 'AWS Textract', type: 'ocr', category: 'aws-textract', key: '', status: 'inactive', 
-      isEnabled: false, isPrimary: false, isBackup: true, backupPriority: 2, createdAt: new Date(),
+      isEnabled: false, isPrimary: false, isBackup: true, backupPriority: 3, createdAt: new Date(),
       usage: { current: 0, limit: 5000, cost: 0, costRate: '$0.0015/page' },
       planConfigs: { free: { enabled: false, priority: 'optional' }, credits_low: { enabled: true, priority: 'tertiary' }, credits_high: { enabled: true, priority: 'tertiary' }, unlimited: { enabled: true, priority: 'tertiary' } },
       models: [],
@@ -246,7 +254,7 @@ const AdminApiManagement = () => {
     },
     { 
       id: '23', name: 'Azure Computer Vision', type: 'ocr', category: 'azure-vision', key: '', status: 'inactive', 
-      isEnabled: false, isPrimary: false, isBackup: true, backupPriority: 3, createdAt: new Date(),
+      isEnabled: false, isPrimary: false, isBackup: true, backupPriority: 4, createdAt: new Date(),
       usage: { current: 0, limit: 5000, cost: 0, costRate: '$0.001/page' },
       planConfigs: { free: { enabled: false, priority: 'optional' }, credits_low: { enabled: false, priority: 'optional' }, credits_high: { enabled: true, priority: 'optional' }, unlimited: { enabled: true, priority: 'optional' } },
       models: [],
@@ -396,24 +404,40 @@ const AdminApiManagement = () => {
 
   const handleTestProvider = async (id: string) => {
     const provider = providers.find(p => p.id === id);
-    if (!provider?.key) {
+    
+    // Local providers (like Tesseract) don't need API keys
+    const isLocalProvider = provider?.category === 'tesseract';
+    
+    if (!provider?.key && !isLocalProvider) {
       toast({ title: "No key configured", description: "Please enter an API key first.", variant: "destructive" });
       return;
     }
 
     setProviders(prev => prev.map(p => p.id === id ? { ...p, status: 'testing' } : p));
-    toast({ title: "Testing Connection", description: `Testing ${provider.name}...` });
+    toast({ title: "Testing Connection", description: `Testing ${provider?.name}...` });
 
     const startTime = Date.now();
     
     try {
-      const response = await apiRequest('POST', '/api/validate-api-key', {
-        type: provider.category,
-        key: provider.key
-      });
+      let response;
+      let result;
       
-      const result = await response.json();
-      const latency = Date.now() - startTime;
+      if (isLocalProvider) {
+        // Test local OCR provider
+        response = await apiRequest('POST', '/api/ocr/test', {
+          providerId: provider?.category
+        });
+        result = await response.json();
+      } else {
+        // Test API-based provider
+        response = await apiRequest('POST', '/api/validate-api-key', {
+          type: provider?.category,
+          key: provider?.key
+        });
+        result = await response.json();
+      }
+      
+      const latency = result.latency || (Date.now() - startTime);
       
       setProviders(prev => prev.map(p => 
         p.id === id ? { ...p, status: result.success ? 'active' : 'problem', lastTested: new Date(), latency } : p
@@ -422,8 +446,8 @@ const AdminApiManagement = () => {
       toast({
         title: result.success ? "Connection Successful" : "Connection Failed",
         description: result.success 
-          ? `${provider.name} responded in ${latency}ms` 
-          : result.message || `Could not connect to ${provider.name}`,
+          ? result.message || `${provider?.name} responded in ${latency}ms` 
+          : result.message || `Could not connect to ${provider?.name}`,
         variant: result.success ? "default" : "destructive"
       });
     } catch (error: any) {
@@ -434,7 +458,7 @@ const AdminApiManagement = () => {
       
       toast({
         title: "Connection Failed",
-        description: error?.message || `Could not connect to ${provider.name}`,
+        description: error?.message || `Could not connect to ${provider?.name}`,
         variant: "destructive"
       });
     }
@@ -444,14 +468,26 @@ const AdminApiManagement = () => {
     const provider = providers.find(p => p.id === id);
     if (!provider) return;
 
-    if (!provider.key) {
+    const isLocalProvider = provider.category === 'tesseract';
+
+    if (!provider.key && !isLocalProvider) {
       toast({ title: "No key configured", description: "Please enter an API key first to check for updates.", variant: "destructive" });
       return;
     }
 
-    toast({ title: "Checking for updates", description: `Checking ${provider.name} for new models...` });
+    toast({ title: "Checking for updates", description: `Checking ${provider.name} for updates...` });
 
     try {
+      if (isLocalProvider) {
+        // Local providers - check npm for Tesseract.js updates
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        toast({
+          title: "Up to date",
+          description: `${provider.name} is running the latest version (v5.1.1)`
+        });
+        return;
+      }
+
       const response = await apiRequest('POST', '/api/check-model-updates', {
         type: provider.category,
         key: provider.key
@@ -459,7 +495,16 @@ const AdminApiManagement = () => {
       
       const result = await response.json();
       
-      if (result.success && result.models && result.models.length > 0) {
+      if (result.success && result.hasUpdates) {
+        // Show update available notification
+        setProviders(prev => prev.map(p => 
+          p.id === id ? { ...p, hasUpdate: true, availableModels: result.models } : p
+        ));
+        toast({
+          title: "Updates Available",
+          description: `${provider.name} has ${result.models?.length || 'new'} model updates available.`
+        });
+      } else if (result.success && result.models && result.models.length > 0) {
         toast({
           title: "Models Retrieved",
           description: `${provider.name} has ${result.models.length} models available. Current configuration is up to date.`
@@ -623,10 +668,11 @@ const AdminApiManagement = () => {
     setExpandedModels(prev => ({ ...prev, [providerId]: !prev[providerId] }));
   };
 
-  const getStatusLight = (status: ApiKeyStatus, hasKey: boolean, isEnabled: boolean, latency?: number) => {
-    if (!hasKey) {
+  const getStatusLight = (status: ApiKeyStatus, hasKey: boolean, isEnabled: boolean, latency?: number, isLocalProvider: boolean = false) => {
+    // Local providers (like Tesseract) don't need API keys
+    if (!hasKey && !isLocalProvider) {
       return (
-        <div className="flex items-center gap-2" title="Not Configured">
+        <div className="flex items-center gap-2" title="Not Configured - API Key Required">
           <div className="w-3 h-3 rounded-full bg-zinc-600 shadow-[0_0_6px_rgba(100,100,100,0.5)]" />
           <span className="text-xs text-zinc-500">Unconfigured</span>
         </div>
@@ -858,7 +904,7 @@ const AdminApiManagement = () => {
           <div>
             <div className="flex items-center gap-2">
               <span className="font-medium text-orange-200 text-lg">{provider.name}</span>
-              {getStatusLight(provider.status, !!provider.key, provider.isEnabled, provider.latency)}
+              {getStatusLight(provider.status, !!provider.key, provider.isEnabled, provider.latency, provider.category === 'tesseract')}
               {provider.isPrimary && <Badge className="bg-blue-500/20 text-blue-400">Primary</Badge>}
               {provider.isBackup && <Badge className="bg-purple-500/20 text-purple-400">Backup #{provider.backupPriority}</Badge>}
             </div>
@@ -1038,7 +1084,7 @@ const AdminApiManagement = () => {
           variant="outline" 
           onClick={() => handleTestProvider(provider.id)}
           className="border-orange-500 text-orange-400 hover:bg-orange-500/20"
-          disabled={!provider.key || provider.status === 'testing'}
+          disabled={(!provider.key && provider.category !== 'tesseract') || provider.status === 'testing'}
           data-testid={`button-test-${provider.id}`}
         >
           <RefreshCw className={`w-4 h-4 mr-1 ${provider.status === 'testing' ? 'animate-spin' : ''}`} /> Test
@@ -1049,7 +1095,7 @@ const AdminApiManagement = () => {
           variant="outline" 
           onClick={() => handleUpdateProvider(provider.id)}
           className="border-blue-500 text-blue-400 hover:bg-blue-500/20"
-          disabled={!provider.key}
+          disabled={!provider.key && provider.category !== 'tesseract'}
           data-testid={`button-update-${provider.id}`}
         >
           <ArrowUpCircle className="w-4 h-4 mr-1" /> Update

@@ -602,6 +602,61 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ====== OCR Provider Status Routes ======
+  app.get("/api/ocr/providers", async (req, res) => {
+    try {
+      const providers = ocrService.getAvailableProviders();
+      return res.json({
+        success: true,
+        providers
+      });
+    } catch (error: any) {
+      console.error("Error getting OCR providers:", error);
+      return res.status(500).json({
+        success: false,
+        message: error?.message || "Failed to get OCR providers"
+      });
+    }
+  });
+
+  app.get("/api/ocr/status", async (req, res) => {
+    try {
+      const statuses = ocrService.getProviderStatuses();
+      return res.json({
+        success: true,
+        statuses
+      });
+    } catch (error: any) {
+      console.error("Error getting OCR status:", error);
+      return res.status(500).json({
+        success: false,
+        message: error?.message || "Failed to get OCR status"
+      });
+    }
+  });
+
+  app.post("/api/ocr/test", async (req, res) => {
+    try {
+      const { providerId, apiKey } = req.body;
+      
+      if (!providerId) {
+        return res.status(400).json({
+          success: false,
+          message: "Provider ID required"
+        });
+      }
+      
+      const result = await ocrService.testProvider(providerId, apiKey);
+      return res.json(result);
+    } catch (error: any) {
+      console.error("Error testing OCR provider:", error);
+      return res.status(500).json({
+        success: false,
+        message: error?.message || "Failed to test OCR provider"
+      });
+    }
+  });
+
   // ====== File Organization Routes ======
   app.post("/api/organize-folders", async (req, res) => {
     try {
@@ -832,7 +887,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         },
         alerts: activeAlerts,
         alertCount: activeAlerts.length,
-        version: '2.3'
+        version: '3.5.0-beta'
       });
     } catch (error: any) {
       console.error("Error getting system health:", error);
